@@ -4,11 +4,25 @@ node_modules/
 # Environment
 .env
 
-# Uploads (except .gitkeep)
+# Uploads – keep directory structure but ignore actual files
 uploads/*
 !uploads/.gitkeep
+!uploads/avatars/
+!uploads/team-logos/
+uploads/avatars/*
 !uploads/avatars/.gitkeep
+uploads/team-logos/*
 !uploads/team-logos/.gitkeep
+
+# Same for backend/uploads (nested)
+backend/uploads/*
+!backend/uploads/.gitkeep
+!backend/uploads/avatars/
+!backend/uploads/team-logos/
+backend/uploads/avatars/*
+!backend/uploads/avatars/.gitkeep
+backend/uploads/team-logos/*
+!backend/uploads/team-logos/.gitkeep
 
 # Build
 dist/

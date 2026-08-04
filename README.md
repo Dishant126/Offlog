@@ -1,56 +1,131 @@
-# Team Management System
+# OffLog – Offline Team Management System
 
-A production-ready, offline-capable team management application built with React (Vite), Node.js, Express, and MongoDB.
+A production-ready, fully offline team management system built with React, Node.js, Express, and MongoDB.
 
-## Features
+## Tech Stack
 
-- **Authentication**: Register, Login, Logout, Change Password, Edit Profile
-- **Session Invalidation**: Password changes log out all other devices via tokenVersion
-- **Team Management**: Create teams, join via unique codes, manage members
-- **Roles**: Global (ADMIN/USER) and Team-level (TEAM_LEADER/MENTOR/MEMBER)
-- **Join Requests**: Request to join, approve/reject by team leader
-- **Notifications**: Real-time notifications for team events
-- **Admin Dashboard**: Manage users, teams, view activity logs
-- **File Uploads**: Avatar and team logo uploads stored locally
-- **Offline**: Everything runs locally - no cloud services needed
+| Layer | Technology |
+|---|---|
+| Frontend | React 18, Vite, Tailwind CSS 3, React Router v6, Axios |
+| Backend  | Node.js, Express.js, Mongoose |
+| Database | MongoDB (local or Atlas) |
+| Auth     | JWT + bcrypt (password hashing at 12 rounds) |
+| File Uploads | Multer (local disk storage) |
+
+---
 
 ## Prerequisites
 
-- Node.js (v18+)
-- MongoDB (running locally on default port 27017)
+- **Node.js** v18 or later
+- **MongoDB** — either:
+  - [MongoDB Community Server](https://www.mongodb.com/try/download/community) (fully offline)
+  - Or use your existing Atlas cluster (update the URI in `.env`)
+
+---
 
 ## Quick Start
 
-### 1. Start MongoDB
-```bash
-# macOS/Linux
-mongod
+### 1. Clone & Install
 
-# Windows (if installed as service)
-net start MongoDB
-```
-
-### 2. Setup Backend
 ```bash
+# Install backend dependencies
 cd backend
 npm install
-npm run seed    # Creates admin user: admin@local.com / admin123
-npm start       # Server runs on http://localhost:5000
+
+# Install frontend dependencies
+cd ../frontend
+npm install
 ```
 
-### 3. Setup Frontend (new terminal)
+### 2. Configure Backend Environment
+
+```bash
+cd backend
+cp .env.example .env
+```
+
+Edit `.env`:
+
+```env
+PORT=5000
+MONGODB_URI=mongodb://127.0.0.1:27017/team_management   # local MongoDB
+JWT_SECRET=your_very_strong_secret_here
+JWT_EXPIRE=7d
+NODE_ENV=development
+CLIENT_URL=http://localhost:5173
+```
+
+### 3. Seed the Admin User
+
+```bash
+cd backend
+npm run seed
+```
+
+This creates: **admin@offlog.com** / **Admin@1234**
+
+### 4. Start Backend
+
+```bash
+cd backend
+npm run dev
+```
+
+The API will be running at `http://localhost:5000`
+
+### 5. Start Frontend
+
 ```bash
 cd frontend
-npm install
-npm run dev     # App runs on http://localhost:5173
+npm run dev
 ```
 
-### 4. Open Browser
-Navigate to http://localhost:5173
+The app will be available at `http://localhost:5173`
 
-## Default Admin Account
-- **Email**: admin@local.com
-- **Password**: admin123
+---
+
+## Features
+
+### Authentication
+- Register / Login / Logout
+- JWT with httpOnly cookie + Bearer token
+- `tokenVersion` – changing password invalidates **all** other sessions
+- Edit profile, change password, upload avatar
+
+### Global Roles
+| Role | Permissions |
+|---|---|
+| `ADMIN` | Manage all users & teams, view all activity logs |
+| `USER`  | Create teams, join teams, manage own content |
+
+### Team Roles
+| Role | Permissions |
+|---|---|
+| `TEAM_LEADER` | Full team control (edit, delete, approve/reject, remove members, promote, transfer) |
+| `MENTOR`      | View team, view members, help manage |
+| `MEMBER`      | View team, leave team |
+
+### Team Features
+- Create teams (public or private)
+- Unique join codes (`TEAM-XXXXXX`)
+- Join public teams directly
+- Join private teams via code → approval flow
+- Transfer leadership
+- Regenerate join code
+- Toggle join requests on/off
+- Upload team logo
+
+### Notifications
+- Real-time-style notifications (polls every 30 seconds)
+- Types: join request, join accepted/rejected, role changed, removed from team, leadership transferred
+
+### Admin Dashboard
+- User management (search, edit, deactivate, delete)
+- Team management (search, delete)
+- Activity logs with action color coding
+- Platform stats overview
+
+---
 
 ## Project Structure
 
@@ -58,77 +133,40 @@ Navigate to http://localhost:5173
 team-management-system/
 ├── backend/
 │   ├── src/
-│   │   ├── config/       # Database config
-│   │   ├── controllers/  # Route handlers
-│   │   ├── middlewares/  # Auth, error handling, upload
-│   │   ├── models/       # Mongoose models
-│   │   ├── routes/       # API routes
-│   │   ├── services/     # Business logic
-│   │   ├── utils/        # Helpers, logger, response
-│   │   └── validators/   # Input validation
-│   ├── uploads/          # Local file storage
+│   │   ├── config/         # DB connection
+│   │   ├── controllers/    # Request handlers
+│   │   ├── middlewares/    # Auth, upload, error, validate
+│   │   ├── models/         # Mongoose schemas
+│   │   ├── routes/         # Express routers
+│   │   ├── services/       # Business logic
+│   │   ├── utils/          # Helpers, logger, response, seed
+│   │   └── validators/     # Input validation (express-validator)
+│   ├── uploads/
+│   │   ├── avatars/        # User avatar files
+│   │   └── team-logos/     # Team logo files
+│   ├── app.js
 │   └── server.js
 └── frontend/
     ├── src/
-    │   ├── components/   # Reusable UI components
-    │   ├── context/      # React Context (Auth)
-    │   ├── pages/        # Page components
-    │   ├── services/     # API service layer
-    │   └── assets/       # Styles
+    │   ├── assets/styles/  # Tailwind CSS
+    │   ├── components/
+    │   │   └── common/     # Navbar, Card, Modal, Loader
+    │   ├── context/        # AuthContext
+    │   ├── hooks/          # useToast
+    │   ├── layouts/        # MainLayout
+    │   ├── pages/          # All page components
+    │   └── services/       # Axios API wrappers
+    ├── tailwind.config.js
     └── vite.config.js
 ```
 
-## Tech Stack
+---
 
-**Backend:**
-- Node.js + Express.js
-- MongoDB + Mongoose
-- JWT Authentication + bcrypt
-- Express Validator + Helmet + CORS + Morgan
-- Multer (file uploads)
+## Security
 
-**Frontend:**
-- React 18 + Vite
-- React Router DOM
-- React Context API (state management)
-- Tailwind CSS
-- Axios
-- Lucide React (icons)
-
-## API Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | /api/auth/register | Register new user |
-| POST | /api/auth/login | Login |
-| POST | /api/auth/logout | Logout |
-| GET | /api/auth/me | Get current user |
-| PUT | /api/auth/change-password | Change password |
-| GET | /api/users/dashboard | User dashboard |
-| PUT | /api/users/profile | Update profile |
-| POST | /api/users/avatar | Upload avatar |
-| GET | /api/teams/my-teams | Get my teams |
-| GET | /api/teams/public | Get public teams |
-| POST | /api/teams | Create team |
-| GET | /api/teams/:id | Get team details |
-| PUT | /api/teams/:id | Update team |
-| DELETE | /api/teams/:id | Delete team |
-| POST | /api/teams/join | Join team by code |
-| GET | /api/teams/:id/join-requests | Get join requests |
-| PUT | /api/teams/:id/join-requests/:reqId | Respond to request |
-| GET | /api/admin/stats | Admin stats |
-| GET | /api/admin/users | List users |
-| GET | /api/admin/teams | List teams |
-| GET | /api/admin/activity-logs | Activity logs |
-
-## Environment Variables
-
-Create `.env` in backend/:
-```
-PORT=5000
-MONGODB_URI=mongodb://localhost:27017/team_management
-JWT_SECRET=your_secret_key
-JWT_EXPIRE=7d
-NODE_ENV=development
-CLIENT_URL=http://localhost:5173
-```
+- Passwords hashed with bcrypt (12 rounds) — never stored in plain text
+- JWT signed with secret — verified on every request
+- `tokenVersion` field on user — incremented on password change, invalidates all existing tokens
+- Helmet.js for security headers
+- File upload validation (type + 5MB limit)
+- Input validation on all routes (express-validator)
