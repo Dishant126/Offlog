@@ -15,24 +15,31 @@ function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-surface-50">
         <Loader size="lg" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-surface-50">
       {user && <Navbar />}
       <Routes>
-        <Route path="/login" element={!user ? <Login /> : <Navigate to="/dashboard" />} />
-        <Route path="/register" element={!user ? <Register /> : <Navigate to="/dashboard" />} />
-        <Route path="/dashboard" element={user ? <Dashboard /> : <Navigate to="/login" />} />
-        <Route path="/teams" element={user ? <Teams /> : <Navigate to="/login" />} />
-        <Route path="/teams/:teamId" element={user ? <TeamDetail /> : <Navigate to="/login" />} />
-        <Route path="/profile" element={user ? <Profile /> : <Navigate to="/login" />} />
-        <Route path="/admin" element={user?.role === 'ADMIN' ? <AdminDashboard /> : <Navigate to="/dashboard" />} />
-        <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} />} />
+        <Route path="/login"    element={!user ? <Login />    : <Navigate to="/dashboard" replace />} />
+        <Route path="/register" element={!user ? <Register /> : <Navigate to="/dashboard" replace />} />
+        <Route path="/dashboard" element={user ? <Dashboard />     : <Navigate to="/login" replace />} />
+        <Route path="/teams"     element={user ? <Teams />         : <Navigate to="/login" replace />} />
+        <Route path="/teams/:teamId" element={user ? <TeamDetail /> : <Navigate to="/login" replace />} />
+        <Route path="/profile"   element={user ? <Profile />       : <Navigate to="/login" replace />} />
+        <Route path="/admin"     element={
+          user?.role === 'ADMIN'
+            ? <AdminDashboard />
+            : user
+              ? <Navigate to="/dashboard" replace />
+              : <Navigate to="/login" replace />
+        } />
+        <Route path="/" element={<Navigate to={user ? '/dashboard' : '/login'} replace />} />
+        <Route path="*" element={<Navigate to={user ? '/dashboard' : '/login'} replace />} />
       </Routes>
     </div>
   )

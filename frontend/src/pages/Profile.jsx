@@ -2,216 +2,256 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { userService } from '../services/userService';
 import { authService } from '../services/authService';
-import Card from '../components/common/Card';
+import { useToast } from '../hooks/useToast';
 import Loader from '../components/common/Loader';
-import { User, Mail, FileText, Lock, Camera, Save, AlertCircle } from 'lucide-react';
+import {
+  User, Mail, FileText, Lock, Camera, Save,
+  Shield, Eye, EyeOff, ChevronRight
+} from 'lucide-react';
 
 export default function Profile() {
-  const { user, updateUser } = useAuth();
+  const { user: authUser, updateUser } = useAuth();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [editForm, setEditForm] = useState({});
+  const [changingPwd, setChangingPwd] = useState(false);
+  const [editForm, setEditForm] = useState({ name: '', bio: '' });
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [showPwd, setShowPwd] = useState({ current: false, new: false, confirm: false });
+  const { success, error: toastError } = useToast();
 
-  useEffect(() => {
-    fetchProfile();
-  }, []);
+  useEffect(() => { fetchProfile(); }, []);
 
   const fetchProfile = async () => {
     try {
       const res = await userService.getProfile();
-      setProfile(res.data);
-      setEditForm({
-        name: res.data.name,
-        bio: res.data.bio || ''
-      });
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
+      const data = res.data?.data ?? res.data;
+      setProfile(data);
+      setEditForm({ name: data.name ?? '', bio: data.bio ?? '' });
+    } catch { toastError('Failed to load profile'); }
+    finally { setLoading(false); }
   };
 
   const handleUpdate = async (e) => {
     e.preventDefault();
-    setError('');
-    setSuccess('');
     setSaving(true);
     try {
       const res = await userService.updateProfile(editForm);
-      setProfile(res.data);
-      updateUser(res.data);
-      setSuccess('Profile updated successfully');
+      const data = res.data?.data ?? res.data;
+      setProfile(data);
+      updateUser(data);
+      success('Profile updated!');
     } catch (err) {
-      setError(err.response?.data?.message || 'Update failed');
-    } finally {
-      setSaving(false);
-    }
+      toastError(err.response?.data?.message || 'Update failed');
+    } finally { setSaving(false); }
   };
 
   const handlePasswordChange = async (e) => {
     e.preventDefault();
-    setError('');
-    setSuccess('');
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      setError('New passwords do not match');
+      toastError('New passwords do not match');
       return;
     }
-    setSaving(true);
+    if (passwordForm.newPassword.length < 6) {
+      toastError('Password must be at least 6 characters');
+      return;
+    }
+    setChangingPwd(true);
     try {
       await authService.changePassword(passwordForm.currentPassword, passwordForm.newPassword);
-      setSuccess('Password changed successfully. All other sessions logged out.');
+      success('Password changed! All other sessions have been logged out.');
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
       setShowPasswordForm(false);
     } catch (err) {
-      setError(err.response?.data?.message || 'Password change failed');
-    } finally {
-      setSaving(false);
-    }
+      toastError(err.response?.data?.message || 'Password change failed');
+    } finally { setChangingPwd(false); }
   };
 
   const handleAvatarUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    // Validate
+    if (file.size > 5 * 1024 * 1024) { toastError('Image must be under 5MB'); return; }
     const formData = new FormData();
     formData.append('avatar', file);
     try {
       const res = await userService.uploadAvatar(formData);
-      setProfile(prev => ({ ...prev, avatar: res.data.avatar }));
-      updateUser({ avatar: res.data.avatar });
-    } catch (err) {
-      alert('Failed to upload avatar');
-    }
+      const data = res.data?.data ?? res.data;
+      const avatarUrl = data?.avatar ?? data;
+      setProfile(prev => ({ ...prev, avatar: avatarUrl }));
+      updateUser({ avatar: avatarUrl });
+      success('Avatar updated!');
+    } catch { toastError('Failed to upload avatar'); }
   };
 
-  if (loading) return <div className="p-8"><Loader size="lg" /></div>;
+  const togglePwd = (field) => setShowPwd(p => ({ ...p, [field]: !p[field] }));
+
+  if (loading) return <Loader size="lg" center />;
+
+  const initials = profile?.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) ?? '?';
 
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">My Profile</h1>
+    <div className="page-wrapper">
+      <h1 className="page-title mb-8">My Profile</h1>
 
-      {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700 text-sm">
-          <AlertCircle className="h-4 w-4" /> {error}
-        </div>
-      )}
-      {success && (
-        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
-          {success}
-        </div>
-      )}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-      <Card className="mb-6">
-        <div className="flex items-center gap-6 mb-6">
-          <div className="relative">
-            {profile?.avatar ? (
-              <img src={profile.avatar} alt="" className="h-24 w-24 rounded-full object-cover" />
-            ) : (
-              <div className="h-24 w-24 rounded-full bg-primary-100 flex items-center justify-center">
-                <User className="h-12 w-12 text-primary-600" />
-              </div>
+        {/* ── Left: Avatar + identity ── */}
+        <div className="lg:col-span-1">
+          <div className="card text-center">
+            {/* Avatar */}
+            <div className="relative inline-block mx-auto mb-4">
+              {profile?.avatar ? (
+                <img
+                  src={profile.avatar}
+                  alt=""
+                  className="h-28 w-28 rounded-2xl object-cover ring-4 ring-primary-100 mx-auto"
+                />
+              ) : (
+                <div className="h-28 w-28 rounded-2xl bg-gradient-card flex items-center justify-center ring-4 ring-primary-100 mx-auto">
+                  <span className="text-3xl font-bold text-white">{initials}</span>
+                </div>
+              )}
+              <label className="absolute -bottom-2 -right-2 w-9 h-9 rounded-xl bg-primary-600 text-white flex items-center justify-center cursor-pointer hover:bg-primary-700 transition-colors shadow-glow-sm">
+                <Camera className="h-4 w-4" />
+                <input type="file" className="hidden" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleAvatarUpload} />
+              </label>
+            </div>
+
+            <h2 className="text-xl font-bold text-slate-900 mt-2">{profile?.name}</h2>
+            <p className="text-slate-500 text-sm mt-0.5">{profile?.email}</p>
+            <div className="mt-3 flex items-center justify-center gap-2">
+              <span className={profile?.role === 'ADMIN' ? 'badge badge-admin' : 'badge badge-member'}>
+                {profile?.role === 'ADMIN' ? <Shield className="h-3 w-3" /> : <User className="h-3 w-3" />}
+                {profile?.role}
+              </span>
+            </div>
+            {profile?.bio && (
+              <p className="mt-4 text-sm text-slate-600 leading-relaxed border-t border-slate-100 pt-4">
+                {profile.bio}
+              </p>
             )}
-            <label className="absolute bottom-0 right-0 p-2 bg-primary-600 text-white rounded-full cursor-pointer hover:bg-primary-700">
-              <Camera className="h-4 w-4" />
-              <input type="file" className="hidden" accept="image/*" onChange={handleAvatarUpload} />
-            </label>
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">{profile?.name}</h2>
-            <p className="text-gray-600 flex items-center gap-1">
-              <Mail className="h-4 w-4" /> {profile?.email}
-            </p>
-            <span className={`inline-block mt-2 text-xs px-2 py-1 rounded-full ${
-              profile?.role === 'ADMIN' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'
-            }`}>
-              {profile?.role}
-            </span>
           </div>
         </div>
 
-        <form onSubmit={handleUpdate} className="space-y-4">
-          <div>
-            <label className="label flex items-center gap-1"><User className="h-4 w-4" /> Name</label>
-            <input
-              type="text"
-              className="input"
-              value={editForm.name}
-              onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-              required
-            />
-          </div>
-          <div>
-            <label className="label flex items-center gap-1"><FileText className="h-4 w-4" /> Bio</label>
-            <textarea
-              className="input"
-              rows={3}
-              value={editForm.bio}
-              onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
-              maxLength={500}
-            />
-          </div>
-          <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2">
-            <Save className="h-4 w-4" /> {saving ? 'Saving...' : 'Save Changes'}
-          </button>
-        </form>
-      </Card>
+        {/* ── Right: Edit forms ── */}
+        <div className="lg:col-span-2 space-y-4">
 
-      <Card>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-            <Lock className="h-5 w-5" /> Password
-          </h3>
-          <button 
-            onClick={() => setShowPasswordForm(!showPasswordForm)}
-            className="text-primary-600 text-sm hover:underline"
-          >
-            {showPasswordForm ? 'Cancel' : 'Change Password'}
-          </button>
-        </div>
+          {/* Edit Profile */}
+          <div className="card">
+            <h3 className="text-lg font-bold text-slate-900 mb-5 flex items-center gap-2">
+              <User className="h-5 w-5 text-primary-500" />
+              Personal Information
+            </h3>
+            <form onSubmit={handleUpdate} className="space-y-4">
+              <div>
+                <label className="label">Full Name</label>
+                <div className="relative">
+                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <input
+                    type="text"
+                    className="input pl-10"
+                    value={editForm.name}
+                    onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))}
+                    required
+                    placeholder="Your full name"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="label">Email</label>
+                <div className="relative">
+                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <input
+                    type="email"
+                    className="input pl-10 bg-slate-50 cursor-not-allowed"
+                    value={profile?.email ?? ''}
+                    disabled
+                  />
+                </div>
+                <p className="text-xs text-slate-400 mt-1">Email cannot be changed</p>
+              </div>
+              <div>
+                <label className="label">Bio</label>
+                <div className="relative">
+                  <FileText className="absolute left-3.5 top-3 h-4 w-4 text-slate-400" />
+                  <textarea
+                    className="input pl-10"
+                    rows={3}
+                    value={editForm.bio}
+                    onChange={e => setEditForm(p => ({ ...p, bio: e.target.value }))}
+                    maxLength={500}
+                    placeholder="Tell your teammates about yourself..."
+                  />
+                </div>
+                <p className="text-xs text-slate-400 mt-1 text-right">{editForm.bio.length}/500</p>
+              </div>
+              <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2">
+                {saving ? <Loader size="sm" className="border-white/40 border-t-white" /> : <Save className="h-4 w-4" />}
+                {saving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </form>
+          </div>
 
-        {showPasswordForm && (
-          <form onSubmit={handlePasswordChange} className="space-y-4">
-            <div>
-              <label className="label">Current Password</label>
-              <input
-                type="password"
-                className="input"
-                value={passwordForm.currentPassword}
-                onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
-                required
-              />
-            </div>
-            <div>
-              <label className="label">New Password</label>
-              <input
-                type="password"
-                className="input"
-                value={passwordForm.newPassword}
-                onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
-                required
-                minLength={6}
-              />
-            </div>
-            <div>
-              <label className="label">Confirm New Password</label>
-              <input
-                type="password"
-                className="input"
-                value={passwordForm.confirmPassword}
-                onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
-                required
-              />
-            </div>
-            <button type="submit" disabled={saving} className="btn-primary">
-              {saving ? 'Changing...' : 'Change Password'}
+          {/* Change Password */}
+          <div className="card">
+            <button
+              onClick={() => setShowPasswordForm(p => !p)}
+              className="w-full flex items-center justify-between text-left"
+            >
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Lock className="h-5 w-5 text-primary-500" />
+                Change Password
+              </h3>
+              <ChevronRight className={`h-5 w-5 text-slate-400 transition-transform duration-200 ${showPasswordForm ? 'rotate-90' : ''}`} />
             </button>
-          </form>
-        )}
-      </Card>
+
+            {showPasswordForm && (
+              <form onSubmit={handlePasswordChange} className="space-y-4 mt-5 pt-5 border-t border-slate-100">
+                {[
+                  { field: 'currentPassword', label: 'Current Password',  autocomplete: 'current-password' },
+                  { field: 'newPassword',     label: 'New Password',      autocomplete: 'new-password' },
+                  { field: 'confirmPassword', label: 'Confirm New Password', autocomplete: 'new-password' },
+                ].map(({ field, label, autocomplete }) => (
+                  <div key={field}>
+                    <label className="label">{label}</label>
+                    <div className="relative">
+                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <input
+                        type={showPwd[field.replace('Password','').replace('confirm','confirm').replace('current','current').replace('new','new')] ? 'text' : 'password'}
+                        className="input pl-10 pr-10"
+                        value={passwordForm[field]}
+                        onChange={e => setPasswordForm(p => ({ ...p, [field]: e.target.value }))}
+                        required
+                        minLength={field !== 'currentPassword' ? 6 : 1}
+                        autoComplete={autocomplete}
+                        placeholder="••••••••"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => togglePwd(field)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        {showPwd[field] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <div className="flex gap-3">
+                  <button type="submit" disabled={changingPwd} className="btn-primary flex items-center gap-2">
+                    {changingPwd ? <Loader size="sm" className="border-white/40 border-t-white" /> : <Lock className="h-4 w-4" />}
+                    {changingPwd ? 'Changing...' : 'Change Password'}
+                  </button>
+                  <button type="button" onClick={() => setShowPasswordForm(false)} className="btn-secondary">
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

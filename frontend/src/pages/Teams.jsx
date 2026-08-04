@@ -1,10 +1,90 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { teamService } from '../services/teamService';
-import Card from '../components/common/Card';
+import { useToast } from '../hooks/useToast';
 import Modal from '../components/common/Modal';
 import Loader from '../components/common/Loader';
-import { Plus, Search, Users, Globe, Lock, Copy, Check } from 'lucide-react';
+import { Plus, Search, Users, Globe, Lock, Copy, Check, ArrowRight, Hash } from 'lucide-react';
+
+function TeamCard({ membership: m }) {
+  const roleColors = {
+    TEAM_LEADER: 'badge-leader',
+    MENTOR:      'badge-mentor',
+    MEMBER:      'badge-member',
+  };
+  const roleLabel = m.role.replace('_', ' ');
+
+  return (
+    <Link to={`/teams/${m.team._id}`} className="block group">
+      <div className="card card-hover h-full flex flex-col">
+        {/* Card top color bar */}
+        <div className="h-1 -mx-6 -mt-6 mb-5 rounded-t-2xl bg-gradient-card" />
+
+        <div className="flex items-start justify-between mb-4">
+          {m.team.logo ? (
+            <img src={m.team.logo} alt="" className="h-12 w-12 rounded-xl object-cover ring-2 ring-slate-100" />
+          ) : (
+            <div className="h-12 w-12 rounded-xl bg-gradient-card flex items-center justify-center shadow-glow-sm">
+              <Users className="h-5 w-5 text-white" />
+            </div>
+          )}
+          <span className={`${roleColors[m.role] ?? 'badge-member'} text-[11px]`}>
+            {roleLabel}
+          </span>
+        </div>
+
+        <h3 className="font-bold text-slate-900 mb-1 group-hover:text-primary-600 transition-colors">
+          {m.team.name}
+        </h3>
+        <p className="text-xs text-slate-500 line-clamp-2 flex-1">
+          {m.team.description || 'No description provided.'}
+        </p>
+
+        <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
+          <div className="flex items-center gap-1 text-xs text-slate-400">
+            {m.team.visibility === 'PUBLIC'
+              ? <><Globe className="h-3 w-3 text-emerald-500" /> Public</>
+              : <><Lock className="h-3 w-3" /> Private</>}
+          </div>
+          <ArrowRight className="h-4 w-4 text-slate-300 group-hover:text-primary-500 transition-colors" />
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function PublicTeamCard({ team, onJoin, alreadyMember }) {
+  return (
+    <div className="card h-full flex flex-col">
+      <div className="h-1 -mx-6 -mt-6 mb-5 rounded-t-2xl bg-gradient-success" />
+
+      <div className="flex items-start justify-between mb-4">
+        {team.logo ? (
+          <img src={team.logo} alt="" className="h-12 w-12 rounded-xl object-cover" />
+        ) : (
+          <div className="h-12 w-12 rounded-xl bg-emerald-100 flex items-center justify-center">
+            <Globe className="h-5 w-5 text-emerald-600" />
+          </div>
+        )}
+        <span className="badge-public text-[11px]">Public</span>
+      </div>
+
+      <h3 className="font-bold text-slate-900 mb-1">{team.name}</h3>
+      <p className="text-xs text-slate-500 line-clamp-2 flex-1">
+        {team.description || 'No description provided.'}
+      </p>
+      <p className="text-xs text-slate-400 mt-2">By {team.createdBy?.name}</p>
+
+      <button
+        onClick={() => onJoin(team._id)}
+        disabled={alreadyMember}
+        className={`mt-4 w-full btn btn-sm ${alreadyMember ? 'btn-secondary opacity-50 cursor-default' : 'btn-primary'}`}
+      >
+        {alreadyMember ? 'Already Joined' : 'Join Team'}
+      </button>
+    </div>
+  );
+}
 
 export default function Teams() {
   const [teams, setTeams] = useState([]);
@@ -12,13 +92,15 @@ export default function Teams() {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [showJoin, setShowJoin] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [joining, setJoining] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [joinCode, setJoinCode] = useState('');
-  const [copied, setCopied] = useState(false);
+  const [joinMsg, setJoinMsg] = useState('');
+  const [copied, setCopied] = useState(null);
+  const { success, error: toastError } = useToast();
 
-  useEffect(() => {
-    fetchTeams();
-  }, []);
+  useEffect(() => { fetchTeams(); }, []);
 
   const fetchTeams = async () => {
     try {
@@ -27,71 +109,82 @@ export default function Teams() {
         teamService.getPublic()
       ]);
       setTeams(myRes.data?.data ?? myRes.data ?? []);
-      setPublicTeams(publicRes.data?.data?.teams ?? publicRes.data?.teams ?? []);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
+      const pData = publicRes.data?.data ?? publicRes.data;
+      setPublicTeams(pData?.teams ?? pData ?? []);
+    } catch { toastError('Failed to load teams'); }
+    finally { setLoading(false); }
   };
 
   const handleCreate = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
+    setCreating(true);
     try {
       await teamService.create({
         name: formData.get('name'),
         description: formData.get('description'),
         visibility: formData.get('visibility')
       });
+      success('Team created successfully!');
       setShowCreate(false);
       fetchTeams();
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to create team');
-    }
+      toastError(err.response?.data?.message || 'Failed to create team');
+    } finally { setCreating(false); }
   };
 
   const handleJoin = async (e) => {
     e.preventDefault();
+    setJoining(true);
     try {
-      await teamService.join(joinCode);
+      const res = await teamService.join(joinCode.trim().toUpperCase(), joinMsg);
+      const result = res.data?.data ?? res.data;
+      success(result?.joined ? 'Joined team successfully!' : 'Join request sent!');
       setShowJoin(false);
       setJoinCode('');
+      setJoinMsg('');
       fetchTeams();
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to join team');
-    }
+      toastError(err.response?.data?.message || 'Failed to join team');
+    } finally { setJoining(false); }
   };
 
   const handlePublicJoin = async (teamId) => {
     try {
       await teamService.joinPublic(teamId);
+      success('Joined team!');
       fetchTeams();
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to join team');
+      toastError(err.response?.data?.message || 'Failed to join team');
     }
   };
 
   const copyCode = (code) => {
     navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setCopied(code);
+    setTimeout(() => setCopied(null), 2000);
   };
 
-  const filteredPublic = publicTeams.filter(t => 
-    !teams.some(mt => mt.team?._id === t._id) &&
+  const myTeamIds = new Set(teams.map(m => m.team?._id));
+  const filteredPublic = publicTeams.filter(t =>
     t.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  if (loading) return <div className="p-8"><Loader size="lg" /></div>;
+  if (loading) return <Loader size="lg" center />;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Teams</h1>
-        <div className="flex gap-3">
+    <div className="page-wrapper">
+      {/* ── Header ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+        <div>
+          <h1 className="page-title">Teams</h1>
+          <p className="text-slate-500 text-sm mt-1">
+            {teams.length} team{teams.length !== 1 ? 's' : ''} you're part of
+          </p>
+        </div>
+        <div className="flex gap-2">
           <button onClick={() => setShowJoin(true)} className="btn-secondary flex items-center gap-2">
-            <Users className="h-4 w-4" /> Join Team
+            <Hash className="h-4 w-4" /> Join by Code
           </button>
           <button onClick={() => setShowCreate(true)} className="btn-primary flex items-center gap-2">
             <Plus className="h-4 w-4" /> Create Team
@@ -99,136 +192,127 @@ export default function Teams() {
         </div>
       </div>
 
-      <div className="mb-8">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">My Teams</h2>
+      {/* ── My Teams ── */}
+      <section className="mb-10">
+        <h2 className="section-title mb-4">My Teams</h2>
         {teams.length === 0 ? (
-          <Card className="text-center py-12 text-gray-500">
-            <Users className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-            <p>You haven't joined any teams yet</p>
-          </Card>
+          <div className="card text-center py-14">
+            <Users className="h-12 w-12 mx-auto text-slate-200 mb-4" />
+            <p className="font-semibold text-slate-600">No teams yet</p>
+            <p className="text-sm text-slate-400 mt-1">Create a team or join one using a code</p>
+            <div className="flex items-center justify-center gap-3 mt-4">
+              <button onClick={() => setShowCreate(true)} className="btn-primary btn-sm">Create Team</button>
+              <button onClick={() => setShowJoin(true)} className="btn-secondary btn-sm">Join by Code</button>
+            </div>
+          </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {teams.map((m) => (
-              <Link key={m._id} to={`/teams/${m.team._id}`}>
-                <Card className="hover:shadow-lg transition-all h-full">
-                  <div className="flex items-start justify-between mb-3">
-                    {m.team.logo ? (
-                      <img src={m.team.logo} alt="" className="h-12 w-12 rounded-lg object-cover" />
-                    ) : (
-                      <div className="h-12 w-12 rounded-lg bg-primary-100 flex items-center justify-center">
-                        <Users className="h-6 w-6 text-primary-600" />
-                      </div>
-                    )}
-                    <span className={`text-xs px-2 py-1 rounded-full ${
-                      m.role === 'TEAM_LEADER' ? 'bg-purple-100 text-purple-700' :
-                      m.role === 'MENTOR' ? 'bg-blue-100 text-blue-700' :
-                      'bg-gray-100 text-gray-700'
-                    }`}>
-                      {m.role.replace('_', ' ')}
-                    </span>
-                  </div>
-                  <h3 className="font-semibold text-gray-900">{m.team.name}</h3>
-                  <p className="text-sm text-gray-500 mt-1 line-clamp-2">{m.team.description}</p>
-                  {m.role === 'TEAM_LEADER' && (
-                    <div className="mt-3 flex items-center gap-2 text-xs text-gray-500 bg-gray-50 p-2 rounded">
-                      <span>Code: {m.team.joinCode}</span>
-                      <button onClick={(e) => { e.preventDefault(); copyCode(m.team.joinCode); }}>
-                        {copied ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3" />}
-                      </button>
-                    </div>
-                  )}
-                </Card>
-              </Link>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {teams.map(m => (
+              <TeamCard key={m._id} membership={m} />
             ))}
           </div>
         )}
-      </div>
+      </section>
 
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-gray-900">Public Teams</h2>
+      {/* ── Public Teams ── */}
+      <section>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+          <h2 className="section-title">Discover Public Teams</h2>
           <div className="relative">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input
               type="text"
               placeholder="Search teams..."
-              className="input pl-9 w-64"
+              className="input pl-9 w-56 text-sm"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={e => setSearchQuery(e.target.value)}
             />
           </div>
         </div>
+
         {filteredPublic.length === 0 ? (
-          <Card className="text-center py-8 text-gray-500">No public teams found</Card>
+          <div className="card text-center py-10">
+            <Globe className="h-10 w-10 mx-auto text-slate-200 mb-3" />
+            <p className="text-slate-500 text-sm">
+              {searchQuery ? 'No teams match your search' : 'No public teams available yet'}
+            </p>
+          </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredPublic.map((team) => (
-              <Card key={team._id} className="opacity-75">
-                <div className="flex items-start justify-between mb-3">
-                  {team.logo ? (
-                    <img src={team.logo} alt="" className="h-10 w-10 rounded-lg object-cover" />
-                  ) : (
-                    <div className="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                      <Users className="h-5 w-5 text-gray-500" />
-                    </div>
-                  )}
-                  <Globe className="h-4 w-4 text-gray-400" />
-                </div>
-                <h3 className="font-semibold text-gray-900">{team.name}</h3>
-                <p className="text-sm text-gray-500 mt-1 line-clamp-2">{team.description}</p>
-                <p className="text-xs text-gray-400 mt-2">By {team.createdBy.name}</p>
-                <button
-                  onClick={() => handlePublicJoin(team._id)}
-                  className="mt-4 w-full btn-primary text-sm"
-                >
-                  Join Team
-                </button>
-              </Card>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {filteredPublic.map(team => (
+              <PublicTeamCard
+                key={team._id}
+                team={team}
+                onJoin={handlePublicJoin}
+                alreadyMember={myTeamIds.has(team._id)}
+              />
             ))}
           </div>
         )}
-      </div>
+      </section>
 
+      {/* ── Create Team Modal ── */}
       <Modal isOpen={showCreate} onClose={() => setShowCreate(false)} title="Create New Team">
         <form onSubmit={handleCreate} className="space-y-4">
           <div>
             <label className="label">Team Name *</label>
-            <input name="name" type="text" className="input" required maxLength={100} />
+            <input name="name" type="text" className="input" required maxLength={100} placeholder="e.g. Alpha Squad" />
           </div>
           <div>
             <label className="label">Description</label>
-            <textarea name="description" className="input" rows={3} maxLength={1000} />
+            <textarea name="description" className="input" rows={3} maxLength={1000} placeholder="What is this team about?" />
           </div>
           <div>
             <label className="label">Visibility</label>
             <select name="visibility" className="input">
-              <option value="PRIVATE">Private (Join code required)</option>
-              <option value="PUBLIC">Public (Searchable)</option>
+              <option value="PRIVATE">🔒 Private – join code required</option>
+              <option value="PUBLIC">🌐 Public – searchable & open</option>
             </select>
           </div>
-          <div className="flex justify-end gap-3">
+          <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={() => setShowCreate(false)} className="btn-secondary">Cancel</button>
-            <button type="submit" className="btn-primary">Create Team</button>
+            <button type="submit" disabled={creating} className="btn-primary">
+              {creating ? <Loader size="sm" className="border-white/40 border-t-white" /> : 'Create Team'}
+            </button>
           </div>
         </form>
       </Modal>
 
+      {/* ── Join Team Modal ── */}
       <Modal isOpen={showJoin} onClose={() => setShowJoin(false)} title="Join a Team">
         <form onSubmit={handleJoin} className="space-y-4">
           <div>
-            <label className="label">Private Team Join Code</label>
-            <input
-              type="text"
-              className="input uppercase"
-              placeholder="TEAM-XXXXXX"
-              value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-              required
+            <label className="label">Team Join Code</label>
+            <div className="relative">
+              <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                className="input pl-9 uppercase tracking-widest font-mono"
+                placeholder="TEAM-XXXXXX"
+                value={joinCode}
+                onChange={e => setJoinCode(e.target.value.toUpperCase())}
+                required
+                maxLength={12}
+              />
+            </div>
+            <p className="text-xs text-slate-400 mt-1.5">Enter the code shared by the team leader</p>
+          </div>
+          <div>
+            <label className="label">Message (optional)</label>
+            <textarea
+              className="input"
+              rows={2}
+              placeholder="Introduce yourself to the team leader..."
+              value={joinMsg}
+              onChange={e => setJoinMsg(e.target.value)}
+              maxLength={300}
             />
           </div>
-          <div className="flex justify-end gap-3">
+          <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={() => setShowJoin(false)} className="btn-secondary">Cancel</button>
-            <button type="submit" className="btn-primary">Join Private Team</button>
+            <button type="submit" disabled={joining} className="btn-primary">
+              {joining ? <Loader size="sm" className="border-white/40 border-t-white" /> : 'Send Request'}
+            </button>
           </div>
         </form>
       </Modal>

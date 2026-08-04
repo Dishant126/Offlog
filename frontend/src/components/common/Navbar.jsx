@@ -1,15 +1,17 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { notificationService } from '../../services/notificationService';
-import { Users, Bell, LogOut, User, Shield, Menu, X } from 'lucide-react';
+import { Users, Bell, LogOut, User, Shield, Menu, X, ChevronDown, LayoutDashboard } from 'lucide-react';
 
 export default function Navbar() {
   const { user, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [unreadCount, setUnreadCount] = useState(0);
   const [showDropdown, setShowDropdown] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const dropdownRef = useRef(null);
 
   useEffect(() => {
     if (user) fetchNotifications();
@@ -17,11 +19,26 @@ export default function Navbar() {
     return () => clearInterval(interval);
   }, [user]);
 
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // Close mobile menu on route change
+  useEffect(() => { setMobileOpen(false); }, [location.pathname]);
+
   const fetchNotifications = async () => {
     try {
       const res = await notificationService.getAll();
-      setUnreadCount(res.data.unreadCount);
-    } catch (e) { /* ignore */ }
+      const data = res.data?.data ?? res.data;
+      setUnreadCount(data?.unreadCount ?? 0);
+    } catch { /* ignore */ }
   };
 
   const handleLogout = async () => {
@@ -29,86 +46,166 @@ export default function Navbar() {
     navigate('/login');
   };
 
+  const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + '/');
+
+  const navLinks = [
+    { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/teams',     label: 'Teams',     icon: Users },
+  ];
+
   return (
-    <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
+    <nav className="sticky top-0 z-50 bg-dark-nav border-b border-dark-border shadow-lg">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
-          <div className="flex items-center">
-            <Link to="/" className="flex items-center gap-2">
-              <Users className="h-8 w-8 text-primary-600" />
-              <span className="text-xl font-bold text-gray-900 hidden sm:block">TeamManager</span>
-            </Link>
-            <div className="hidden md:flex items-center ml-8 gap-6">
-              <Link to="/dashboard" className="text-sm font-medium text-gray-600 hover:text-primary-600">Dashboard</Link>
-              <Link to="/teams" className="text-sm font-medium text-gray-600 hover:text-primary-600">Teams</Link>
-              <Link to="/profile" className="text-sm font-medium text-gray-600 hover:text-primary-600">Profile</Link>
-              {isAdmin && (
-                <Link to="/admin" className="text-sm font-medium text-primary-600 hover:text-primary-700 flex items-center gap-1">
-                  <Shield className="h-4 w-4" /> Admin
-                </Link>
-              )}
+        <div className="flex items-center justify-between h-16">
+
+          {/* ── Brand ── */}
+          <Link to="/" className="flex items-center gap-2.5 group">
+            <div className="w-8 h-8 rounded-xl bg-gradient-card flex items-center justify-center shadow-glow-sm group-hover:shadow-glow transition-shadow">
+              <Users className="h-4 w-4 text-white" />
             </div>
+            <span className="text-base font-bold text-white hidden sm:block tracking-tight">
+              Off<span className="text-primary-400">Log</span>
+            </span>
+          </Link>
+
+          {/* ── Desktop Nav Links ── */}
+          <div className="hidden md:flex items-center gap-1">
+            {navLinks.map(({ path, label, icon: Icon }) => (
+              <Link
+                key={path}
+                to={path}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+                  isActive(path)
+                    ? 'bg-white/10 text-white'
+                    : 'text-slate-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+              </Link>
+            ))}
+            {isAdmin && (
+              <Link
+                to="/admin"
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+                  isActive('/admin')
+                    ? 'bg-primary-600/20 text-primary-400'
+                    : 'text-slate-400 hover:text-primary-400 hover:bg-primary-600/10'
+                }`}
+              >
+                <Shield className="h-4 w-4" />
+                Admin
+              </Link>
+            )}
           </div>
 
-          <div className="flex items-center gap-4">
-            <Link to="/dashboard" className="relative p-2 text-gray-600 hover:text-primary-600">
+          {/* ── Right Controls ── */}
+          <div className="flex items-center gap-2">
+            {/* Notification Bell */}
+            <Link
+              to="/dashboard"
+              className="relative p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-all duration-200"
+              title="Notifications"
+            >
               <Bell className="h-5 w-5" />
               {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 h-4 w-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-                  {unreadCount}
+                <span className="absolute top-1 right-1 min-w-[16px] h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5 animate-badge-bounce">
+                  {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
             </Link>
 
-            <div className="relative hidden sm:block">
-              <button 
-                onClick={() => setShowDropdown(!showDropdown)}
-                className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900"
+            {/* User Dropdown */}
+            <div className="relative hidden sm:block" ref={dropdownRef}>
+              <button
+                onClick={() => setShowDropdown(s => !s)}
+                className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl text-sm text-slate-300 hover:text-white hover:bg-white/10 transition-all duration-200"
               >
                 {user?.avatar ? (
-                  <img src={user.avatar} alt="" className="h-8 w-8 rounded-full object-cover" />
+                  <img src={user.avatar} alt="" className="h-7 w-7 rounded-full object-cover ring-2 ring-primary-500/50" />
                 ) : (
-                  <div className="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center">
-                    <User className="h-4 w-4 text-primary-600" />
+                  <div className="h-7 w-7 rounded-full bg-gradient-card flex items-center justify-center">
+                    <User className="h-3.5 w-3.5 text-white" />
                   </div>
                 )}
-                <span className="hidden lg:block">{user?.name}</span>
+                <span className="hidden lg:block font-medium truncate max-w-[120px]">{user?.name}</span>
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${showDropdown ? 'rotate-180' : ''}`} />
               </button>
 
               {showDropdown && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
-                  <Link to="/profile" onClick={() => setShowDropdown(false)} className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                    Profile
-                  </Link>
-                  <button 
-                    onClick={handleLogout}
-                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-50 flex items-center gap-2"
+                <div className="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-card-lg border border-slate-100 py-1 animate-scale-in z-50">
+                  <div className="px-4 py-2.5 border-b border-slate-100">
+                    <p className="text-sm font-semibold text-slate-900 truncate">{user?.name}</p>
+                    <p className="text-xs text-slate-500 truncate">{user?.email}</p>
+                  </div>
+                  <Link
+                    to="/profile"
+                    onClick={() => setShowDropdown(false)}
+                    className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                   >
-                    <LogOut className="h-4 w-4" />
-                    Logout
-                  </button>
+                    <User className="h-4 w-4 text-slate-400" />
+                    My Profile
+                  </Link>
+                  <div className="border-t border-slate-100 mt-1 pt-1">
+                    <button
+                      onClick={handleLogout}
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      Sign Out
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
 
-            <button className="md:hidden p-2" onClick={() => setMobileOpen(!mobileOpen)}>
-              {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+            {/* Mobile Menu Toggle */}
+            <button
+              className="md:hidden p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-all"
+              onClick={() => setMobileOpen(o => !o)}
+            >
+              {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
           </div>
         </div>
 
+        {/* ── Mobile Menu ── */}
         {mobileOpen && (
-          <div className="md:hidden border-t border-gray-200 py-3 space-y-2">
-            <Link to="/dashboard" onClick={() => setMobileOpen(false)} className="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded">Dashboard</Link>
-            <Link to="/teams" onClick={() => setMobileOpen(false)} className="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded">Teams</Link>
-            <Link to="/profile" onClick={() => setMobileOpen(false)} className="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded">Profile</Link>
+          <div className="md:hidden border-t border-dark-border py-3 space-y-1 animate-fade-in">
+            {navLinks.map(({ path, label, icon: Icon }) => (
+              <Link
+                key={path}
+                to={path}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                  isActive(path) ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+              </Link>
+            ))}
             {isAdmin && (
-              <Link to="/admin" onClick={() => setMobileOpen(false)} className="block px-3 py-2 text-sm font-medium text-primary-600 hover:bg-gray-50 rounded flex items-center gap-1">
-                <Shield className="h-4 w-4" /> Admin
+              <Link
+                to="/admin"
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-primary-400 hover:bg-primary-600/10 transition-all"
+              >
+                <Shield className="h-4 w-4" />
+                Admin
               </Link>
             )}
-            <button onClick={handleLogout} className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-gray-50 rounded flex items-center gap-2">
-              <LogOut className="h-4 w-4" /> Logout
+            <Link
+              to="/profile"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-all"
+            >
+              <User className="h-4 w-4" />
+              Profile
+            </Link>
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-red-400 hover:bg-red-900/20 transition-all"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign Out
             </button>
           </div>
         )}
