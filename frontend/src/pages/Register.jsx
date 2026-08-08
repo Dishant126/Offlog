@@ -52,7 +52,9 @@ export default function Register() {
           <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm border border-white/30">
             <Users className="h-5 w-5 text-white" />
           </div>
-          <span className="text-2xl font-bold text-white tracking-tight">OffLog</span>
+          <span className="text-2xl font-bold text-white tracking-tight">
+            Off<span className="text-blue-300">Log</span>
+          </span>
         </div>
 
         {/* Hero content */}
@@ -61,7 +63,7 @@ export default function Register() {
             <h1 className="text-4xl font-bold text-white leading-tight">
               Start collaborating<br />with your team today.
             </h1>
-            <p className="mt-3 text-indigo-200 text-lg">
+            <p className="mt-3 text-blue-200 text-lg">
               Create your free account and bring your team together.
             </p>
           </div>
@@ -71,13 +73,13 @@ export default function Register() {
                 <div className="w-7 h-7 rounded-lg bg-white/15 border border-white/20 flex items-center justify-center flex-shrink-0">
                   <Icon className="h-3.5 w-3.5 text-white" />
                 </div>
-                <span className="text-indigo-100 text-sm">{text}</span>
+                <span className="text-blue-100 text-sm">{text}</span>
               </div>
             ))}
           </div>
         </div>
 
-        <p className="relative z-10 text-indigo-300 text-xs">
+        <p className="relative z-10 text-blue-300 text-xs">
           Already have an account?{' '}
           <Link to="/login" className="text-white font-semibold hover:underline">Sign in</Link>
         </p>
@@ -88,10 +90,12 @@ export default function Register() {
         <div className="w-full max-w-md animate-fade-in">
           {/* Mobile brand */}
           <div className="lg:hidden flex items-center gap-2 mb-8">
-            <div className="w-8 h-8 rounded-xl bg-gradient-card flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-primary-600 flex items-center justify-center">
               <Users className="h-4 w-4 text-white" />
             </div>
-            <span className="text-xl font-bold text-slate-900">OffLog</span>
+            <span className="text-xl font-bold text-slate-900">
+              Off<span className="text-primary-600">Log</span>
+            </span>
           </div>
 
           <div className="mb-8">

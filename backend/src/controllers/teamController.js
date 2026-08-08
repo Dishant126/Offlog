@@ -5,7 +5,6 @@ import * as teamService from '../services/teamService.js';
 export const createTeam = async (req, res, next) => {
   try {
     const team = await teamService.createTeam(req.body, req.user._id);
-    await logActivity(req.user._id, 'TEAM_CREATED', 'TEAM', team._id, { teamName: team.name }, req);
     successResponse(res, team, 'Team created successfully', 201);
   } catch (error) {
     next(error);
@@ -45,7 +44,6 @@ export const updateTeam = async (req, res, next) => {
   try {
     const { teamId } = req.params;
     const team = await teamService.updateTeam(teamId, req.body, req.user._id);
-    await logActivity(req.user._id, 'TEAM_UPDATED', 'TEAM', teamId, {}, req);
     successResponse(res, team, 'Team updated successfully');
   } catch (error) {
     next(error);
@@ -57,7 +55,6 @@ export const deleteTeam = async (req, res, next) => {
     const { teamId } = req.params;
     const isAdmin = req.user.role === 'ADMIN';
     await teamService.deleteTeam(teamId, req.user._id, isAdmin);
-    await logActivity(req.user._id, 'TEAM_DELETED', 'TEAM', teamId, {}, req);
     successResponse(res, null, 'Team deleted successfully');
   } catch (error) {
     next(error);
@@ -92,7 +89,6 @@ export const requestJoin = async (req, res, next) => {
     const result = await teamService.requestToJoin(joinCode, req.user._id, message);
 
     if (result.joined) {
-      await logActivity(req.user._id, 'TEAM_JOINED', 'TEAM', result.membership.team, {}, req);
       successResponse(res, result.membership, 'Joined team successfully', 201);
       return;
     }
@@ -107,7 +103,6 @@ export const joinPublicTeam = async (req, res, next) => {
   try {
     const { teamId } = req.params;
     const membership = await teamService.joinPublicTeam(teamId, req.user._id);
-    await logActivity(req.user._id, 'TEAM_JOINED', 'TEAM', teamId, {}, req);
     successResponse(res, membership, 'Joined team successfully', 201);
   } catch (error) {
     next(error);
@@ -139,7 +134,6 @@ export const removeMember = async (req, res, next) => {
   try {
     const { teamId, memberId } = req.params;
     await teamService.removeMember(teamId, memberId, req.user._id);
-    await logActivity(req.user._id, 'MEMBER_REMOVED', 'TEAM_MEMBER', memberId, { teamId }, req);
     successResponse(res, null, 'Member removed successfully');
   } catch (error) {
     next(error);
@@ -163,7 +157,6 @@ export const transferLeadership = async (req, res, next) => {
     const { newLeaderId } = req.body;
     const isAdmin = req.user.role === 'ADMIN';
     await teamService.transferLeadership(teamId, newLeaderId, req.user._id, isAdmin);
-    await logActivity(req.user._id, 'LEADERSHIP_TRANSFERRED', 'TEAM', teamId, { newLeaderId }, req);
     successResponse(res, null, 'Leadership transferred successfully');
   } catch (error) {
     next(error);
@@ -179,3 +172,24 @@ export const leaveTeam = async (req, res, next) => {
     next(error);
   }
 };
+
+export const getTeamActivities = async (req, res, next) => {
+  try {
+    const { teamId } = req.params;
+    const activities = await teamService.getTeamActivities(teamId);
+    successResponse(res, activities);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const cancelJoinRequest = async (req, res, next) => {
+  try {
+    const { requestId } = req.params;
+    await teamService.cancelJoinRequest(requestId, req.user._id);
+    successResponse(res, null, 'Join request cancelled');
+  } catch (error) {
+    next(error);
+  }
+};
+

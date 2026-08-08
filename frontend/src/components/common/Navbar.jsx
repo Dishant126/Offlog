@@ -3,6 +3,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useState, useEffect, useRef } from 'react';
 import { notificationService } from '../../services/notificationService';
 import { Users, Bell, LogOut, User, Shield, Menu, X, ChevronDown, LayoutDashboard } from 'lucide-react';
+import NotificationDropdown from './NotificationDropdown';
+
 
 export default function Navbar() {
   const { user, logout, isAdmin } = useAuth();
@@ -101,19 +103,9 @@ export default function Navbar() {
 
           {/* ── Right Controls ── */}
           <div className="flex items-center gap-2">
-            {/* Notification Bell */}
-            <Link
-              to="/dashboard"
-              className="relative p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-all duration-200"
-              title="Notifications"
-            >
-              <Bell className="h-5 w-5" />
-              {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 min-w-[16px] h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5 animate-badge-bounce">
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </span>
-              )}
-            </Link>
+            {/* Notification Bell Dropdown */}
+            <NotificationDropdown initialUnreadCount={unreadCount} />
+
 
             {/* User Dropdown */}
             <div className="relative hidden sm:block" ref={dropdownRef}>

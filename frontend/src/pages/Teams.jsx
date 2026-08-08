@@ -1,103 +1,163 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { teamService } from '../services/teamService';
+import { useAuth } from '../context/AuthContext';
 import { useToast } from '../hooks/useToast';
 import Modal from '../components/common/Modal';
 import Loader from '../components/common/Loader';
-import { Plus, Search, Users, Globe, Lock, Copy, Check, ArrowRight, Hash } from 'lucide-react';
+import {
+  Plus, Search, Users, Globe, Lock, ArrowRight, Hash, Crown, UserCheck
+} from 'lucide-react';
 
-function TeamCard({ membership: m }) {
-  const roleColors = {
-    TEAM_LEADER: 'badge-leader',
-    MENTOR:      'badge-mentor',
-    MEMBER:      'badge-member',
-  };
-  const roleLabel = m.role.replace('_', ' ');
+const teamColors = [
+  { bg: 'bg-blue-50',    border: 'border-blue-100',   accent: 'bg-blue-600',    text: 'text-blue-600' },
+  { bg: 'bg-emerald-50', border: 'border-emerald-100', accent: 'bg-emerald-600', text: 'text-emerald-600' },
+  { bg: 'bg-amber-50',   border: 'border-amber-100',   accent: 'bg-amber-600',   text: 'text-amber-600' },
+  { bg: 'bg-purple-50',  border: 'border-purple-100',  accent: 'bg-purple-600',  text: 'text-purple-600' },
+  { bg: 'bg-rose-50',    border: 'border-rose-100',    accent: 'bg-rose-600',    text: 'text-rose-600' },
+  { bg: 'bg-cyan-50',    border: 'border-cyan-100',    accent: 'bg-cyan-600',    text: 'text-cyan-600' },
+];
 
-  return (
-    <Link to={`/teams/${m.team._id}`} className="block group">
-      <div className="card card-hover h-full flex flex-col">
-        {/* Card top color bar */}
-        <div className="h-1 -mx-6 -mt-6 mb-5 rounded-t-2xl bg-gradient-card" />
-
-        <div className="flex items-start justify-between mb-4">
-          {m.team.logo ? (
-            <img src={m.team.logo} alt="" className="h-12 w-12 rounded-xl object-cover ring-2 ring-slate-100" />
-          ) : (
-            <div className="h-12 w-12 rounded-xl bg-gradient-card flex items-center justify-center shadow-glow-sm">
-              <Users className="h-5 w-5 text-white" />
-            </div>
-          )}
-          <span className={`${roleColors[m.role] ?? 'badge-member'} text-[11px]`}>
-            {roleLabel}
-          </span>
-        </div>
-
-        <h3 className="font-bold text-slate-900 mb-1 group-hover:text-primary-600 transition-colors">
-          {m.team.name}
-        </h3>
-        <p className="text-xs text-slate-500 line-clamp-2 flex-1">
-          {m.team.description || 'No description provided.'}
-        </p>
-
-        <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-1 text-xs text-slate-400">
-            {m.team.visibility === 'PUBLIC'
-              ? <><Globe className="h-3 w-3 text-emerald-500" /> Public</>
-              : <><Lock className="h-3 w-3" /> Private</>}
-          </div>
-          <ArrowRight className="h-4 w-4 text-slate-300 group-hover:text-primary-500 transition-colors" />
-        </div>
-      </div>
-    </Link>
-  );
+function getInitials(name) {
+  if (!name) return '?';
+  return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
 }
 
-function PublicTeamCard({ team, onJoin, alreadyMember }) {
-  return (
-    <div className="card h-full flex flex-col">
-      <div className="h-1 -mx-6 -mt-6 mb-5 rounded-t-2xl bg-gradient-success" />
+function TeamCard({ team, membership, index, currentUserId, onJoinPublic, isPublicSection = false }) {
+  const colorSet = teamColors[index % teamColors.length];
+  
+  // Calculate role label
+  const role = membership?.role;
+  const isLeader = role === 'TEAM_LEADER' || team.createdBy?._id === currentUserId;
+  const roleLabel = isLeader ? 'Leader' : role ? (role === 'MENTOR' ? 'Mentor' : 'Member') : null;
 
-      <div className="flex items-start justify-between mb-4">
-        {team.logo ? (
-          <img src={team.logo} alt="" className="h-12 w-12 rounded-xl object-cover" />
-        ) : (
-          <div className="h-12 w-12 rounded-xl bg-emerald-100 flex items-center justify-center">
-            <Globe className="h-5 w-5 text-emerald-600" />
+  // Leader name
+  const leaderName = team.createdBy?.name || 'Leader';
+
+  // Members list & avatar stack
+  const members = team.members || [];
+  const memberUsers = members.map(m => m.user || m).filter(u => u && (u.name || u.email));
+  const totalMembers = memberUsers.length || 1;
+  const visibleMembers = memberUsers.slice(0, 3);
+  const remainingMembers = totalMembers > 3 ? totalMembers - 3 : 0;
+
+  return (
+    <div className="card card-hover h-full flex flex-col justify-between group p-5">
+      <div>
+        {/* Top bar with icon & tags */}
+        <div className="flex items-start justify-between mb-4">
+          <div className={`w-12 h-12 rounded-2xl ${colorSet.bg} border ${colorSet.border} flex items-center justify-center flex-shrink-0 font-bold ${colorSet.text} text-base shadow-sm`}>
+            {team.logo ? (
+              <img src={team.logo} alt="" className="w-full h-full rounded-2xl object-cover" />
+            ) : (
+              getInitials(team.name)
+            )}
           </div>
-        )}
-        <span className="badge-public text-[11px]">Public</span>
+
+          <div className="flex items-center gap-1.5 flex-wrap justify-end">
+            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
+              team.visibility === 'PUBLIC' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-slate-100 text-slate-600'
+            }`}>
+              {team.visibility === 'PUBLIC' ? <Globe className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
+              {team.visibility}
+            </span>
+            {roleLabel && (
+              <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                isLeader ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'bg-slate-100 text-slate-700'
+              }`}>
+                {isLeader && <Crown className="h-3 w-3 text-blue-600" />}
+                {roleLabel}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Name & Description */}
+        <h3 className="font-bold text-slate-900 text-base mb-1.5 group-hover:text-primary-600 transition-colors">
+          {team.name}
+        </h3>
+        <p className="text-xs text-slate-500 line-clamp-2 mb-4 leading-relaxed">
+          {team.description || 'Building the future of our team collaboration.'}
+        </p>
+
+        {/* Metadata info */}
+        <div className="text-xs text-slate-400 font-medium mb-4 space-y-1">
+          <p className="flex items-center gap-1.5">
+            <Users className="h-3.5 w-3.5 text-slate-400" />
+            <span>{totalMembers} member{totalMembers !== 1 ? 's' : ''}</span>
+            <span className="text-slate-300">•</span>
+            <span>{leaderName}</span>
+          </p>
+        </div>
       </div>
 
-      <h3 className="font-bold text-slate-900 mb-1">{team.name}</h3>
-      <p className="text-xs text-slate-500 line-clamp-2 flex-1">
-        {team.description || 'No description provided.'}
-      </p>
-      <p className="text-xs text-slate-400 mt-2">By {team.createdBy?.name}</p>
+      {/* Footer avatar stack & View Team link */}
+      <div className="pt-4 border-t border-slate-100 flex items-center justify-between mt-auto">
+        {/* Avatar Stack */}
+        <div className="flex items-center gap-1">
+          <div className="flex -space-x-2">
+            {visibleMembers.length > 0 ? (
+              visibleMembers.map((u, i) => (
+                <div
+                  key={u._id || i}
+                  className="w-7 h-7 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center overflow-hidden"
+                  title={u.name || u.email}
+                >
+                  {u.avatar ? (
+                    <img src={u.avatar} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-[9px] font-bold text-slate-600">
+                      {getInitials(u.name || u.email)}
+                    </span>
+                  )}
+                </div>
+              ))
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center">
+                <span className="text-[9px] font-bold text-slate-500">{getInitials(leaderName)}</span>
+              </div>
+            )}
+          </div>
+          {remainingMembers > 0 && (
+            <span className="text-xs text-slate-400 font-medium ml-1">+{remainingMembers}</span>
+          )}
+        </div>
 
-      <button
-        onClick={() => onJoin(team._id)}
-        disabled={alreadyMember}
-        className={`mt-4 w-full btn btn-sm ${alreadyMember ? 'btn-secondary opacity-50 cursor-default' : 'btn-primary'}`}
-      >
-        {alreadyMember ? 'Already Joined' : 'Join Team'}
-      </button>
+        {/* Action Link or Join Button */}
+        {membership ? (
+          <Link
+            to={`/teams/${team._id}`}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-700 transition-colors group/btn"
+          >
+            View Team
+            <ArrowRight className="h-3.5 w-3.5 group-hover/btn:translate-x-0.5 transition-transform" />
+          </Link>
+        ) : (
+          <button
+            onClick={() => onJoinPublic(team._id)}
+            className="btn-primary btn-sm text-xs py-1 px-3"
+          >
+            Join Team
+          </button>
+        )}
+      </div>
     </div>
   );
 }
 
 export default function Teams() {
-  const [teams, setTeams] = useState([]);
+  const { user } = useAuth();
+  const [myMemberships, setMyMemberships] = useState([]);
   const [publicTeams, setPublicTeams] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [activeFilter, setActiveFilter] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [showJoin, setShowJoin] = useState(false);
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [joinMsg, setJoinMsg] = useState('');
-  const [copied, setCopied] = useState(null);
   const { success, error: toastError } = useToast();
 
   useEffect(() => { fetchTeams(); }, []);
@@ -108,11 +168,14 @@ export default function Teams() {
         teamService.getMyTeams(),
         teamService.getPublic()
       ]);
-      setTeams(myRes.data?.data ?? myRes.data ?? []);
+      setMyMemberships(myRes.data?.data ?? myRes.data ?? []);
       const pData = publicRes.data?.data ?? publicRes.data;
       setPublicTeams(pData?.teams ?? pData ?? []);
-    } catch { toastError('Failed to load teams'); }
-    finally { setLoading(false); }
+    } catch {
+      toastError('Failed to load teams');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCreate = async (e) => {
@@ -130,7 +193,9 @@ export default function Teams() {
       fetchTeams();
     } catch (err) {
       toastError(err.response?.data?.message || 'Failed to create team');
-    } finally { setCreating(false); }
+    } finally {
+      setCreating(false);
+    }
   };
 
   const handleJoin = async (e) => {
@@ -146,7 +211,9 @@ export default function Teams() {
       fetchTeams();
     } catch (err) {
       toastError(err.response?.data?.message || 'Failed to join team');
-    } finally { setJoining(false); }
+    } finally {
+      setJoining(false);
+    }
   };
 
   const handlePublicJoin = async (teamId) => {
@@ -159,28 +226,42 @@ export default function Teams() {
     }
   };
 
-  const copyCode = (code) => {
-    navigator.clipboard.writeText(code);
-    setCopied(code);
-    setTimeout(() => setCopied(null), 2000);
-  };
+  // Combine joined & public teams into a consolidated list for filtering
+  const joinedTeamIds = new Set(myMemberships.map(m => m.team?._id));
 
-  const myTeamIds = new Set(teams.map(m => m.team?._id));
-  const filteredPublic = publicTeams.filter(t =>
-    t.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Build unified list of teams with membership metadata attached
+  const allTeamsList = [
+    ...myMemberships.map(m => ({ team: m.team, membership: m })),
+    ...publicTeams
+      .filter(t => !joinedTeamIds.has(t._id))
+      .map(t => ({ team: t, membership: null }))
+  ];
 
-  if (loading) return <Loader size="lg" center />;
+  // Filter based on active tab and search query
+  const filteredTeams = allTeamsList.filter(({ team, membership }) => {
+    const matchesSearch = team.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (team.description && team.description.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    if (!matchesSearch) return false;
+
+    if (activeFilter === 'My Teams') return !!membership;
+    if (activeFilter === 'Teams I Lead') return membership?.role === 'TEAM_LEADER' || team.createdBy?._id === user?._id;
+    if (activeFilter === 'Public') return team.visibility === 'PUBLIC';
+    if (activeFilter === 'Private') return team.visibility === 'PRIVATE';
+    return true; // All
+  });
+
+  const filters = ['All', 'My Teams', 'Teams I Lead', 'Public', 'Private'];
+
+  if (loading) return <div className="flex items-center justify-center py-20"><Loader size="lg" /></div>;
 
   return (
     <div className="page-wrapper">
-      {/* ── Header ── */}
+      {/* ── Page Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="page-title">Teams</h1>
-          <p className="text-slate-500 text-sm mt-1">
-            {teams.length} team{teams.length !== 1 ? 's' : ''} you're part of
-          </p>
+          <p className="text-slate-500 text-sm mt-1">Manage your teams, members, and collaboration.</p>
         </div>
         <div className="flex gap-2">
           <button onClick={() => setShowJoin(true)} className="btn-secondary flex items-center gap-2">
@@ -192,81 +273,80 @@ export default function Teams() {
         </div>
       </div>
 
-      {/* ── My Teams ── */}
-      <section className="mb-10">
-        <h2 className="section-title mb-4">My Teams</h2>
-        {teams.length === 0 ? (
-          <div className="card text-center py-14">
-            <Users className="h-12 w-12 mx-auto text-slate-200 mb-4" />
-            <p className="font-semibold text-slate-600">No teams yet</p>
-            <p className="text-sm text-slate-400 mt-1">Create a team or join one using a code</p>
-            <div className="flex items-center justify-center gap-3 mt-4">
-              <button onClick={() => setShowCreate(true)} className="btn-primary btn-sm">Create Team</button>
-              <button onClick={() => setShowJoin(true)} className="btn-secondary btn-sm">Join by Code</button>
-            </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {teams.map(m => (
-              <TeamCard key={m._id} membership={m} />
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* ── Public Teams ── */}
-      <section>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-          <h2 className="section-title">Discover Public Teams</h2>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search teams..."
-              className="input pl-9 w-56 text-sm"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-            />
-          </div>
+      {/* ── Search Bar & Filter Tabs ── */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+        {/* Search */}
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search teams..."
+            className="input pl-10 text-sm bg-white"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+          />
         </div>
 
-        {filteredPublic.length === 0 ? (
-          <div className="card text-center py-10">
-            <Globe className="h-10 w-10 mx-auto text-slate-200 mb-3" />
-            <p className="text-slate-500 text-sm">
-              {searchQuery ? 'No teams match your search' : 'No public teams available yet'}
-            </p>
+        {/* Filter Pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+          {filters.map(filter => (
+            <button
+              key={filter}
+              onClick={() => setActiveFilter(filter)}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
+                activeFilter === filter
+                  ? 'bg-slate-900 text-white shadow-sm'
+                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              {filter}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Teams Cards Grid ── */}
+      {filteredTeams.length === 0 ? (
+        <div className="card text-center py-16">
+          <Users className="h-12 w-12 mx-auto text-slate-300 mb-3" />
+          <p className="font-semibold text-slate-700">No teams found</p>
+          <p className="text-xs text-slate-400 mt-1">Try adjusting your search or filter options</p>
+          <div className="flex items-center justify-center gap-3 mt-5">
+            <button onClick={() => setShowCreate(true)} className="btn-primary btn-sm">Create Team</button>
+            <button onClick={() => setShowJoin(true)} className="btn-secondary btn-sm">Join by Code</button>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filteredPublic.map(team => (
-              <PublicTeamCard
-                key={team._id}
-                team={team}
-                onJoin={handlePublicJoin}
-                alreadyMember={myTeamIds.has(team._id)}
-              />
-            ))}
-          </div>
-        )}
-      </section>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-5">
+          {filteredTeams.map(({ team, membership }, idx) => (
+            <TeamCard
+              key={team._id}
+              team={team}
+              membership={membership}
+              index={idx}
+              currentUserId={user?._id}
+              onJoinPublic={handlePublicJoin}
+            />
+          ))}
+        </div>
+      )}
 
       {/* ── Create Team Modal ── */}
       <Modal isOpen={showCreate} onClose={() => setShowCreate(false)} title="Create New Team">
         <form onSubmit={handleCreate} className="space-y-4">
           <div>
             <label className="label">Team Name *</label>
-            <input name="name" type="text" className="input" required maxLength={100} placeholder="e.g. Alpha Squad" />
+            <input name="name" type="text" className="input" required maxLength={100} placeholder="e.g. Design System" />
           </div>
           <div>
             <label className="label">Description</label>
-            <textarea name="description" className="input" rows={3} maxLength={1000} placeholder="What is this team about?" />
+            <textarea name="description" className="input" rows={3} maxLength={1000} placeholder="Building the future of our design language..." />
           </div>
           <div>
             <label className="label">Visibility</label>
             <select name="visibility" className="input">
+              <option value="PUBLIC">🌐 Public – searchable & open to all</option>
               <option value="PRIVATE">🔒 Private – join code required</option>
-              <option value="PUBLIC">🌐 Public – searchable & open</option>
             </select>
           </div>
           <div className="flex justify-end gap-3 pt-2">
@@ -287,15 +367,15 @@ export default function Teams() {
               <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input
                 type="text"
-                className="input pl-9 uppercase tracking-widest font-mono"
-                placeholder="TEAM-XXXXXX"
+                className="input pl-9 uppercase tracking-widest font-mono text-sm"
+                placeholder="ZVHWBK"
                 value={joinCode}
                 onChange={e => setJoinCode(e.target.value.toUpperCase())}
                 required
                 maxLength={12}
               />
             </div>
-            <p className="text-xs text-slate-400 mt-1.5">Enter the code shared by the team leader</p>
+            <p className="text-xs text-slate-400 mt-1.5">Enter the 6-character code shared by your team leader</p>
           </div>
           <div>
             <label className="label">Message (optional)</label>

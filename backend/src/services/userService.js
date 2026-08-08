@@ -27,11 +27,14 @@ export const updateUserProfile = async (userId, updateData) => {
 export const getUserDashboard = async (userId) => {
   const user = await User.findById(userId).select('-password');
 
-  // Get teams with roles
+  // Get teams with populated members & user details
   const memberships = await TeamMember.find({ user: userId })
     .populate({
       path: 'team',
-      populate: { path: 'createdBy', select: 'name email avatar' }
+      populate: [
+        { path: 'createdBy', select: 'name email avatar' },
+        { path: 'members', populate: { path: 'user', select: 'name email avatar' } }
+      ]
     })
     .sort({ joinedAt: -1 });
 
@@ -40,12 +43,25 @@ export const getUserDashboard = async (userId) => {
     .populate('team', 'name description logo joinCode')
     .sort({ createdAt: -1 });
 
-  // Get unread notifications only; read items are removed from the inbox
-  const notifications = await Notification.find({ user: userId, read: false })
+  // Get incoming join requests for teams where user is TEAM_LEADER or MENTOR
+  const leaderOrMentorTeamIds = memberships
+    .filter(m => ['TEAM_LEADER', 'MENTOR'].includes(m.role) && m.team)
+    .map(m => m.team._id);
+
+  const incomingRequests = await JoinRequest.find({
+    team: { $in: leaderOrMentorTeamIds },
+    status: 'PENDING'
+  })
+    .populate('team', 'name logo')
+    .populate('user', 'name email avatar')
+    .sort({ createdAt: -1 });
+
+  // Get recent notifications for activity feed
+  const notifications = await Notification.find({ user: userId })
     .populate('relatedTeam', 'name')
     .populate('relatedUser', 'name avatar')
     .sort({ createdAt: -1 })
-    .limit(10);
+    .limit(15);
 
   const unreadCount = await Notification.countDocuments({ user: userId, read: false });
 
@@ -53,6 +69,7 @@ export const getUserDashboard = async (userId) => {
     user,
     teams: memberships,
     pendingRequests,
+    incomingRequests,
     notifications,
     unreadCount
   };
