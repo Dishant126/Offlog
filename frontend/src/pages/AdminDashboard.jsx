@@ -13,11 +13,11 @@ import {
 
 const unwrap = (res) => res.data?.data ?? res.data;
 
-function StatCard({ icon: Icon, value, label, gradient, iconColor }) {
+function StatCard({ icon: Icon, value, label, iconBg, iconColor }) {
   return (
-    <div className="card group hover-lift">
+    <div className="card hover-lift">
       <div className="flex items-center gap-4">
-        <div className={`stat-icon ${gradient}`}>
+        <div className={`stat-icon ${iconBg}`}>
           <Icon className={`h-5 w-5 ${iconColor}`} />
         </div>
         <div>
@@ -30,18 +30,18 @@ function StatCard({ icon: Icon, value, label, gradient, iconColor }) {
 }
 
 const ACTION_COLORS = {
-  USER_REGISTERED:      'bg-emerald-100 text-emerald-700',
-  USER_LOGGED_IN:       'bg-blue-100 text-blue-700',
+  USER_REGISTERED:      'bg-emerald-50 text-emerald-700',
+  USER_LOGGED_IN:       'bg-blue-50 text-blue-700',
   USER_LOGGED_OUT:      'bg-slate-100 text-slate-600',
-  TEAM_CREATED:         'bg-violet-100 text-violet-700',
-  TEAM_DELETED:         'bg-red-100 text-red-700',
-  TEAM_JOINED:          'bg-indigo-100 text-indigo-700',
-  MEMBER_REMOVED:       'bg-orange-100 text-orange-700',
-  PROFILE_UPDATED:      'bg-sky-100 text-sky-700',
-  PASSWORD_CHANGED:     'bg-amber-100 text-amber-700',
-  LEADERSHIP_TRANSFERRED:'bg-purple-100 text-purple-700',
-  ADMIN_DELETED_USER:   'bg-red-100 text-red-700',
-  ADMIN_DELETED_TEAM:   'bg-red-100 text-red-700',
+  TEAM_CREATED:         'bg-purple-50 text-purple-700',
+  TEAM_DELETED:         'bg-red-50 text-red-700',
+  TEAM_JOINED:          'bg-blue-50 text-blue-700',
+  MEMBER_REMOVED:       'bg-amber-50 text-amber-700',
+  PROFILE_UPDATED:      'bg-sky-50 text-sky-700',
+  PASSWORD_CHANGED:     'bg-amber-50 text-amber-700',
+  LEADERSHIP_TRANSFERRED:'bg-purple-50 text-purple-700',
+  ADMIN_DELETED_USER:   'bg-red-50 text-red-700',
+  ADMIN_DELETED_TEAM:   'bg-red-50 text-red-700',
 };
 
 // ── Main Component ─────────────────────────────────────────────────────────
@@ -159,7 +159,7 @@ export default function AdminDashboard() {
 
   // ── Render ─────────────────────────────────────────────────────────────
 
-  if (loading) return <Loader size="lg" center />;
+  if (loading) return <div className="flex items-center justify-center py-20"><Loader size="lg" /></div>;
 
   const tabs = [
     { id: 'overview', label: 'Overview',       icon: BarChart3  },
@@ -172,7 +172,7 @@ export default function AdminDashboard() {
     <div className="page-wrapper">
       {/* ── Page Header ── */}
       <div className="flex items-center gap-3 mb-8">
-        <div className="w-11 h-11 rounded-xl bg-gradient-card flex items-center justify-center shadow-glow-sm">
+        <div className="w-11 h-11 rounded-xl bg-primary-600 flex items-center justify-center">
           <Shield className="h-5 w-5 text-white" />
         </div>
         <div>
@@ -203,10 +203,10 @@ export default function AdminDashboard() {
       {activeTab === 'overview' && stats && (
         <div className="animate-fade-in">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <StatCard icon={Users}     value={stats.totalUsers}        label="Total Users"        gradient="bg-indigo-50"  iconColor="text-primary-600" />
-            <StatCard icon={Shield}    value={stats.totalTeams}        label="Total Teams"        gradient="bg-violet-50"  iconColor="text-violet-600" />
-            <StatCard icon={UserCheck} value={stats.totalMembers}      label="Team Memberships"   gradient="bg-emerald-50" iconColor="text-emerald-600" />
-            <StatCard icon={Clock}     value={stats.totalJoinRequests} label="Pending Requests"   gradient="bg-amber-50"   iconColor="text-amber-600" />
+            <StatCard icon={Users}     value={stats.totalUsers}        label="Total Users"        iconBg="bg-blue-50"     iconColor="text-blue-600" />
+            <StatCard icon={Shield}    value={stats.totalTeams}        label="Total Teams"        iconBg="bg-purple-50"   iconColor="text-purple-600" />
+            <StatCard icon={UserCheck} value={stats.totalMembers}      label="Team Memberships"   iconBg="bg-emerald-50"  iconColor="text-emerald-600" />
+            <StatCard icon={Clock}     value={stats.totalJoinRequests} label="Pending Requests"   iconBg="bg-amber-50"    iconColor="text-amber-600" />
           </div>
 
           {/* Active vs Total users bar */}
@@ -223,7 +223,7 @@ export default function AdminDashboard() {
               </div>
               <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-gradient-card rounded-full transition-all duration-500"
+                  className="h-full bg-primary-600 rounded-full transition-all duration-500"
                   style={{ width: `${Math.round((stats.activeUsers / stats.totalUsers) * 100)}%` }}
                 />
               </div>
@@ -278,7 +278,7 @@ export default function AdminDashboard() {
                             {u.avatar ? (
                               <img src={u.avatar} alt="" className="h-8 w-8 rounded-full object-cover" />
                             ) : (
-                              <div className="h-8 w-8 rounded-full bg-gradient-card flex items-center justify-center flex-shrink-0">
+                              <div className="h-8 w-8 rounded-full bg-primary-600 flex items-center justify-center flex-shrink-0">
                                 <span className="text-white text-xs font-bold">
                                   {u.name?.[0]?.toUpperCase() ?? '?'}
                                 </span>
@@ -378,8 +378,8 @@ export default function AdminDashboard() {
                             {t.logo ? (
                               <img src={t.logo} alt="" className="h-8 w-8 rounded-lg object-cover" />
                             ) : (
-                              <div className="h-8 w-8 rounded-lg bg-indigo-100 flex items-center justify-center flex-shrink-0">
-                                <Users className="h-4 w-4 text-indigo-500" />
+                              <div className="h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
+                                <Users className="h-4 w-4 text-blue-500" />
                               </div>
                             )}
                             <span className="font-semibold text-slate-900 text-sm">{t.name}</span>

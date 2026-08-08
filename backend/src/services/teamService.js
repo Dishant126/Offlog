@@ -3,6 +3,7 @@ import TeamMember from '../models/TeamMember.js';
 import JoinRequest from '../models/JoinRequest.js';
 import User from '../models/User.js';
 import Notification from '../models/Notification.js';
+import ActivityLog from '../models/ActivityLog.js';
 import { generateUniqueJoinCode } from '../utils/helpers.js';
 
 export const createTeam = async (teamData, userId) => {
@@ -22,6 +23,14 @@ export const createTeam = async (teamData, userId) => {
     user: userId,
     team: team._id,
     role: 'TEAM_LEADER'
+  });
+
+  await ActivityLog.create({
+    user: userId,
+    action: 'TEAM_CREATED',
+    targetType: 'TEAM',
+    targetId: team._id,
+    details: { teamId: team._id, teamName: team.name }
   });
 
   return team;
@@ -51,7 +60,10 @@ export const getUserTeams = async (userId) => {
   const memberships = await TeamMember.find({ user: userId })
     .populate({
       path: 'team',
-      populate: { path: 'createdBy', select: 'name email avatar' }
+      populate: [
+        { path: 'createdBy', select: 'name email avatar' },
+        { path: 'members', populate: { path: 'user', select: 'name email avatar' } }
+      ]
     })
     .sort({ joinedAt: -1 });
 
@@ -66,6 +78,10 @@ export const getPublicTeams = async (search = '', page = 1, limit = 20) => {
 
   const teams = await Team.find(query)
     .populate('createdBy', 'name email avatar')
+    .populate({
+      path: 'members',
+      populate: { path: 'user', select: 'name email avatar' }
+    })
     .skip((page - 1) * limit)
     .limit(limit)
     .sort({ createdAt: -1 });
@@ -93,6 +109,15 @@ export const updateTeam = async (teamId, updateData, userId) => {
   });
 
   await team.save();
+
+  await ActivityLog.create({
+    user: userId,
+    action: 'TEAM_UPDATED',
+    targetType: 'TEAM',
+    targetId: teamId,
+    details: { teamId, teamName: team.name }
+  });
+
   return team;
 };
 
@@ -159,6 +184,22 @@ export const requestToJoin = async (joinCode, userId, message = '') => {
         relatedUser: userId
       });
     }
+
+    await Notification.create({
+      user: userId,
+      type: 'TEAM_JOINED',
+      title: 'Joined Team',
+      message: `You joined ${team.name}`,
+      relatedTeam: team._id
+    });
+
+    await ActivityLog.create({
+      user: userId,
+      action: 'TEAM_JOINED',
+      targetType: 'TEAM',
+      targetId: team._id,
+      details: { teamId: team._id, teamName: team.name, userName: user?.name }
+    });
 
     return { joined: true, membership };
   }
@@ -232,6 +273,22 @@ export const joinPublicTeam = async (teamId, userId) => {
     });
   }
 
+  await Notification.create({
+    user: userId,
+    type: 'TEAM_JOINED',
+    title: 'Joined Team',
+    message: `You joined ${team.name}`,
+    relatedTeam: team._id
+  });
+
+  await ActivityLog.create({
+    user: userId,
+    action: 'TEAM_JOINED',
+    targetType: 'TEAM',
+    targetId: team._id,
+    details: { teamId: team._id, teamName: team.name, userName: user?.name }
+  });
+
   return membership;
 };
 
@@ -277,20 +334,58 @@ export const respondToJoinRequest = async (requestId, teamId, userId, status) =>
       role: 'MEMBER'
     });
 
+    const leaderUser = await User.findById(userId);
+
     await Notification.create({
       user: request.user,
       type: 'JOIN_ACCEPTED',
       title: 'Join Request Accepted',
-      message: `You have been accepted into ${team.name}`,
+      message: `Your request to join ${team.name} was accepted by ${leaderUser?.name || 'the team leader'}`,
       relatedTeam: teamId
     });
+
+    await Notification.create({
+      user: request.user,
+      type: 'TEAM_JOINED',
+      title: 'Joined Team',
+      message: `You joined ${team.name}`,
+      relatedTeam: teamId
+    });
+
+    // 1. Log activity for team leader accepting request (happens first)
+    await ActivityLog.create({
+      user: userId,
+      action: 'JOIN_REQUEST_ACCEPTED',
+      targetType: 'JOIN_REQUEST',
+      targetId: requestId,
+      details: { teamId, teamName: team.name, userName: leaderUser?.name, targetName: user?.name }
+    });
+
+    // 2. Log activity for joining user (happens as a result of acceptance)
+    await ActivityLog.create({
+      user: request.user,
+      action: 'TEAM_JOINED',
+      targetType: 'TEAM',
+      targetId: teamId,
+      details: { teamId, teamName: team.name, userName: user?.name }
+    });
   } else {
+    const leaderUser = await User.findById(userId);
+
     await Notification.create({
       user: request.user,
       type: 'JOIN_REJECTED',
       title: 'Join Request Rejected',
       message: `Your request to join ${team.name} was rejected`,
       relatedTeam: teamId
+    });
+
+    await ActivityLog.create({
+      user: userId,
+      action: 'JOIN_REQUEST_REJECTED',
+      targetType: 'JOIN_REQUEST',
+      targetId: requestId,
+      details: { teamId, teamName: team.name, userName: leaderUser?.name, targetName: user?.name }
     });
   }
 
@@ -303,7 +398,7 @@ export const removeMember = async (teamId, memberId, userId) => {
     throw new Error('Not authorized to remove members');
   }
 
-  const targetMember = await TeamMember.findOne({ team: teamId, user: memberId });
+  const targetMember = await TeamMember.findOne({ team: teamId, user: memberId }).populate('user', 'name');
   if (!targetMember) throw new Error('Member not found');
 
   if (targetMember.role === 'TEAM_LEADER') {
@@ -314,14 +409,39 @@ export const removeMember = async (teamId, memberId, userId) => {
     throw new Error('Mentors cannot remove other mentors');
   }
 
+  const team = await Team.findById(teamId);
+  const removerUser = await User.findById(userId);
+
   await targetMember.deleteOne();
 
+  // Notify target member
   await Notification.create({
     user: memberId,
     type: 'REMOVED_FROM_TEAM',
     title: 'Removed from Team',
-    message: `You have been removed from the team`,
+    message: `You were removed from ${team?.name || 'the team'}`,
     relatedTeam: teamId
+  });
+
+  // Notify team leader if removed by someone else
+  const leader = await TeamMember.findOne({ team: teamId, role: 'TEAM_LEADER' });
+  if (leader && leader.user.toString() !== userId) {
+    await Notification.create({
+      user: leader.user,
+      type: 'MEMBER_REMOVED',
+      title: 'Member Removed',
+      message: `${targetMember.user?.name || 'A member'} was removed from ${team?.name || 'the team'}`,
+      relatedTeam: teamId,
+      relatedUser: memberId
+    });
+  }
+
+  await ActivityLog.create({
+    user: userId,
+    action: 'MEMBER_REMOVED',
+    targetType: 'TEAM_MEMBER',
+    targetId: memberId,
+    details: { teamId, teamName: team?.name, targetName: targetMember.user?.name, removerName: removerUser?.name }
   });
 
   return true;
@@ -333,22 +453,33 @@ export const updateMemberRole = async (teamId, memberId, newRole, userId) => {
     throw new Error('Only team leader can change roles');
   }
 
-  const targetMember = await TeamMember.findOne({ team: teamId, user: memberId });
+  const targetMember = await TeamMember.findOne({ team: teamId, user: memberId }).populate('user', 'name');
   if (!targetMember) throw new Error('Member not found');
 
   if (targetMember.role === 'TEAM_LEADER') {
     throw new Error('Cannot change team leader role directly. Use transfer leadership.');
   }
 
+  const oldRole = targetMember.role;
   targetMember.role = newRole;
   await targetMember.save();
+
+  const team = await Team.findById(teamId);
 
   await Notification.create({
     user: memberId,
     type: 'ROLE_CHANGED',
     title: 'Role Updated',
-    message: `Your role has been updated to ${newRole}`,
+    message: `Your role in ${team?.name || 'the team'} was updated to ${newRole.replace('_', ' ')}`,
     relatedTeam: teamId
+  });
+
+  await ActivityLog.create({
+    user: userId,
+    action: 'ROLE_UPDATED',
+    targetType: 'TEAM_MEMBER',
+    targetId: memberId,
+    details: { teamId, teamName: team?.name, targetName: targetMember.user?.name, oldRole, newRole }
   });
 
   return targetMember;
@@ -362,8 +493,10 @@ export const transferLeadership = async (teamId, newLeaderId, userId, isAdmin = 
     }
   }
 
-  const newLeader = await TeamMember.findOne({ team: teamId, user: newLeaderId });
+  const newLeader = await TeamMember.findOne({ team: teamId, user: newLeaderId }).populate('user', 'name');
   if (!newLeader) throw new Error('User is not a member of this team');
+
+  const team = await Team.findById(teamId);
 
   // Demote current leader to member
   await TeamMember.updateOne(
@@ -382,8 +515,16 @@ export const transferLeadership = async (teamId, newLeaderId, userId, isAdmin = 
     user: newLeaderId,
     type: 'LEADERSHIP_TRANSFERRED',
     title: 'Leadership Transferred',
-    message: 'You are now the team leader',
+    message: `You are now the team leader of ${team?.name}`,
     relatedTeam: teamId
+  });
+
+  await ActivityLog.create({
+    user: userId,
+    action: 'LEADERSHIP_TRANSFERRED',
+    targetType: 'TEAM',
+    targetId: teamId,
+    details: { teamId, teamName: team?.name, newLeaderName: newLeader.user?.name }
   });
 
   return newLeader;
@@ -414,6 +555,16 @@ export const leaveTeam = async (teamId, userId) => {
 
   await membership.deleteOne();
 
+  // Notify leaving user so their dashboard activity reflects it
+  await Notification.create({
+    user: userId,
+    type: 'TEAM_LEFT',
+    title: 'Left Team',
+    message: `You left ${team?.name || 'the team'}`,
+    relatedTeam: teamId
+  });
+
+  // Notify team leader
   if (leader && leader.user.toString() !== userId && team && leavingUser) {
     await Notification.create({
       user: leader.user,
@@ -425,5 +576,35 @@ export const leaveTeam = async (teamId, userId) => {
     });
   }
 
+  await ActivityLog.create({
+    user: userId,
+    action: 'TEAM_LEFT',
+    targetType: 'TEAM',
+    targetId: teamId,
+    details: { teamId, teamName: team?.name, userName: leavingUser?.name }
+  });
+
   return { left: true, teamDeleted: false };
 };
+
+export const getTeamActivities = async (teamId) => {
+  const logs = await ActivityLog.find({
+    $or: [
+      { targetId: teamId },
+      { 'details.teamId': teamId }
+    ]
+  })
+    .populate('user', 'name email avatar')
+    .sort({ createdAt: -1 })
+    .limit(30);
+
+  return logs;
+};
+
+export const cancelJoinRequest = async (requestId, userId) => {
+  const request = await JoinRequest.findOne({ _id: requestId, user: userId, status: 'PENDING' });
+  if (!request) throw new Error('Join request not found or already processed');
+  await request.deleteOne();
+  return true;
+};
+

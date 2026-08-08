@@ -87,7 +87,7 @@ export default function Profile() {
 
   const togglePwd = (field) => setShowPwd(p => ({ ...p, [field]: !p[field] }));
 
-  if (loading) return <Loader size="lg" center />;
+  if (loading) return <div className="flex items-center justify-center py-20"><Loader size="lg" /></div>;
 
   const initials = profile?.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) ?? '?';
 
@@ -106,14 +106,14 @@ export default function Profile() {
                 <img
                   src={profile.avatar}
                   alt=""
-                  className="h-28 w-28 rounded-2xl object-cover ring-4 ring-primary-100 mx-auto"
+                  className="h-28 w-28 rounded-2xl object-cover ring-4 ring-blue-50 mx-auto"
                 />
               ) : (
-                <div className="h-28 w-28 rounded-2xl bg-gradient-card flex items-center justify-center ring-4 ring-primary-100 mx-auto">
+                <div className="h-28 w-28 rounded-2xl bg-primary-600 flex items-center justify-center ring-4 ring-blue-50 mx-auto">
                   <span className="text-3xl font-bold text-white">{initials}</span>
                 </div>
               )}
-              <label className="absolute -bottom-2 -right-2 w-9 h-9 rounded-xl bg-primary-600 text-white flex items-center justify-center cursor-pointer hover:bg-primary-700 transition-colors shadow-glow-sm">
+              <label className="absolute -bottom-2 -right-2 w-9 h-9 rounded-xl bg-primary-600 text-white flex items-center justify-center cursor-pointer hover:bg-primary-700 transition-colors shadow-md">
                 <Camera className="h-4 w-4" />
                 <input type="file" className="hidden" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleAvatarUpload} />
               </label>
@@ -219,7 +219,7 @@ export default function Profile() {
                     <div className="relative">
                       <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                       <input
-                        type={showPwd[field.replace('Password','').replace('confirm','confirm').replace('current','current').replace('new','new')] ? 'text' : 'password'}
+                        type={showPwd[field] ? 'text' : 'password'}
                         className="input pl-10 pr-10"
                         value={passwordForm[field]}
                         onChange={e => setPasswordForm(p => ({ ...p, [field]: e.target.value }))}

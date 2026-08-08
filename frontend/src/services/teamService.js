@@ -22,4 +22,6 @@ export const teamService = {
   transferLeadership: (teamId, newLeaderId) => 
     api.post(`/teams/${teamId}/transfer-leadership`, { newLeaderId }),
   leave: (teamId) => api.post(`/teams/${teamId}/leave`),
+  getActivities: (id) => api.get(`/teams/${id}/activities`),
+  cancelJoinRequest: (requestId) => api.delete(`/teams/join-requests/${requestId}`),
 };
