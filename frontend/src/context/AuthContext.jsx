@@ -41,8 +41,8 @@ export const AuthProvider = ({ children }) => {
     return user;
   };
 
-  const register = async (name, email, password) => {
-    const response = await authService.register(name, email, password);
+  const register = async (name, email, password, role = 'USER') => {
+    const response = await authService.register(name, email, password, role);
     const { user, token } = unwrapAuthData(response);
     localStorage.setItem('token', token);
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
@@ -66,7 +66,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, updateUser, loading, isAdmin: user?.role === 'ADMIN' }}>
+    <AuthContext.Provider value={{ user, login, register, logout, updateUser, loading, isAdmin: user?.role === 'ADMIN', isMentor: user?.role === 'MENTOR' }}>
       {children}
     </AuthContext.Provider>
   );

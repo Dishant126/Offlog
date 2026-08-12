@@ -85,3 +85,51 @@ export const getStats = async (req, res, next) => {
     next(error);
   }
 };
+
+export const getMentorManagement = async (req, res, next) => {
+  try {
+    const data = await adminService.getMentorManagementData();
+    successResponse(res, data);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const createMentor = async (req, res, next) => {
+  try {
+    const mentor = await adminService.createMentorUser(req.body);
+    successResponse(res, mentor, 'Mentor created successfully', 201);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const assignMentorToTeam = async (req, res, next) => {
+  try {
+    const { teamId, mentorId } = req.body;
+    const result = await adminService.addMentorToTeam(teamId, mentorId);
+    successResponse(res, result, result.added ? 'Mentor assigned successfully' : 'Mentor already assigned');
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const removeMentorFromTeam = async (req, res, next) => {
+  try {
+    const { teamId, mentorId } = req.params;
+    await adminService.removeMentorFromTeam(teamId, mentorId);
+    successResponse(res, null, 'Mentor removed successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getMentorsForTeam = async (req, res, next) => {
+  try {
+    const { teamId } = req.params;
+    const mentors = await adminService.getMentorsForTeam(teamId);
+    successResponse(res, mentors);
+  } catch (error) {
+    next(error);
+  }
+};

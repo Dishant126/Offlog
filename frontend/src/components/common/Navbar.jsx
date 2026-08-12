@@ -2,12 +2,12 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useState, useEffect, useRef } from 'react';
 import { notificationService } from '../../services/notificationService';
-import { Users, Bell, LogOut, User, Shield, Menu, X, ChevronDown, LayoutDashboard } from 'lucide-react';
+import { Users, Bell, LogOut, User, Shield, Menu, X, ChevronDown, LayoutDashboard, Sparkles } from 'lucide-react';
 import NotificationDropdown from './NotificationDropdown';
 
 
 export default function Navbar() {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, isAdmin, isMentor } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [unreadCount, setUnreadCount] = useState(0);

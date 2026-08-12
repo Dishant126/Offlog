@@ -257,6 +257,7 @@ export default function TeamDetail() {
 
   const isLeader = userRole === 'TEAM_LEADER' || team.createdBy?._id === authUser?._id;
   const isMentor = userRole === 'MENTOR';
+  const canManageRoles = isLeader || isMentor;
   const isMember = !!userRole;
 
   const leaderMember = members.find(m => m.role === 'TEAM_LEADER') || { user: team.createdBy || { name: 'Kshitiz Jain' } };
@@ -639,7 +640,7 @@ export default function TeamDetail() {
 
                         {/* Actions Dropdown */}
                         <td className="py-3.5 px-6 text-right">
-                          {isLeader && !isTargetLeader ? (
+                          {canManageRoles && !isTargetLeader ? (
                             <ActionMenu>
                               <button
                                 onClick={() => handleRoleChange(m.user._id, m.role === 'MENTOR' ? 'MEMBER' : 'MENTOR')}
@@ -754,7 +755,7 @@ export default function TeamDetail() {
                       </td>
 
                       <td className="py-4 px-6 text-right">
-                        {isLeader && !isTargetLeader ? (
+                        {canManageRoles && !isTargetLeader ? (
                           <ActionMenu>
                             <button
                               onClick={() => handleRoleChange(m.user._id, m.role === 'MENTOR' ? 'MEMBER' : 'MENTOR')}

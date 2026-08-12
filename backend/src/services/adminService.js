@@ -4,6 +4,7 @@ import TeamMember from '../models/TeamMember.js';
 import ActivityLog from '../models/ActivityLog.js';
 import JoinRequest from '../models/JoinRequest.js';
 import Notification from '../models/Notification.js';
+import { isMentorAssignedToTeam } from '../utils/mentorAccess.js';
 
 export const getAllUsers = async (page = 1, limit = 20, search = '') => {
   const query = {};
@@ -94,12 +95,82 @@ export const getStats = async () => {
   const totalMembers = await TeamMember.countDocuments();
   const totalJoinRequests = await JoinRequest.countDocuments({ status: 'PENDING' });
   const activeUsers = await User.countDocuments({ isActive: true });
+  const totalMentors = await User.countDocuments({ role: 'MENTOR' });
 
   return {
     totalUsers,
     totalTeams,
     totalMembers,
     totalJoinRequests,
-    activeUsers
+    activeUsers,
+    totalMentors
   };
+};
+
+export const getMentorManagementData = async () => {
+  const mentors = await User.find({ role: 'MENTOR' }).select('-password').sort({ createdAt: -1 });
+  const teams = await Team.find({}).populate('createdBy', 'name email avatar').sort({ createdAt: -1 });
+
+  const teamMentorMap = await Promise.all(teams.map(async (team) => {
+    const memberships = await TeamMember.find({ team: team._id, role: 'MENTOR' }).populate('user', 'name email avatar');
+    return {
+      team,
+      mentors: memberships.map((membership) => membership.user)
+    };
+  }));
+
+  return { mentors, teams: teamMentorMap };
+};
+
+export const addMentorToTeam = async (teamId, mentorId) => {
+  const team = await Team.findById(teamId);
+  if (!team) throw new Error('Team not found');
+
+  const mentor = await User.findById(mentorId);
+  if (!mentor || mentor.role !== 'MENTOR') throw new Error('Mentor not found');
+
+  const existingMembership = await TeamMember.findOne({ team: teamId, user: mentorId });
+  if (existingMembership) {
+    if (existingMembership.role === 'MENTOR') {
+      return { added: false, message: 'Mentor already assigned to this team' };
+    }
+    existingMembership.role = 'MENTOR';
+    await existingMembership.save();
+    return { added: true, membership: existingMembership };
+  }
+
+  const membership = await TeamMember.create({ user: mentorId, team: teamId, role: 'MENTOR' });
+  return { added: true, membership };
+};
+
+export const removeMentorFromTeam = async (teamId, mentorId) => {
+  const membership = await TeamMember.findOne({ team: teamId, user: mentorId, role: 'MENTOR' });
+  if (!membership) throw new Error('Mentor assignment not found');
+  await membership.deleteOne();
+  return true;
+};
+
+export const createMentorUser = async (userData) => {
+  const existing = await User.findOne({ email: userData.email });
+  if (existing) throw new Error('User already exists with this email');
+
+  const mentor = await User.create({
+    ...userData,
+    role: 'MENTOR'
+  });
+
+  return mentor;
+};
+
+export const getMentorsForTeam = async (teamId) => {
+  const memberships = await TeamMember.find({ team: teamId, role: 'MENTOR' }).populate('user', 'name email avatar');
+  return memberships.map((membership) => membership.user);
+};
+
+export const getTeamsForMentor = async (mentorId) => {
+  const memberships = await TeamMember.find({ user: mentorId, role: 'MENTOR' }).populate({
+    path: 'team',
+    populate: { path: 'createdBy', select: 'name email avatar' }
+  });
+  return memberships.map((membership) => membership.team);
 };

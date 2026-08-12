@@ -11,7 +11,10 @@ export const registerValidator = [
     .isEmail().withMessage('Please enter a valid email'),
   body('password')
     .notEmpty().withMessage('Password is required')
-    .isLength({ min: 6 }).withMessage('Password must be at least 6 characters')
+    .isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  body('role')
+    .optional()
+    .isIn(['USER']).withMessage('Only regular users can sign up')
 ];
 
 export const loginValidator = [

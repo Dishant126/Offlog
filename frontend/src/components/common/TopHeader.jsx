@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Search, HelpCircle, Sun, User, LogOut, ChevronDown, Shield } from 'lucide-react';
+import { Search, HelpCircle, Sun, User, LogOut, ChevronDown, Shield, Sparkles } from 'lucide-react';
 import NotificationDropdown from './NotificationDropdown';
 
 const pageTitles = {
@@ -12,7 +12,7 @@ const pageTitles = {
 };
 
 export default function TopHeader({ unreadCount = 0 }) {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, isAdmin, isMentor } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [showDropdown, setShowDropdown] = useState(false);
@@ -43,7 +43,7 @@ export default function TopHeader({ unreadCount = 0 }) {
   };
 
   const initials = user?.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) ?? '?';
-  const roleLabel = isAdmin ? 'Admin' : 'Member';
+  const roleLabel = isAdmin ? 'Admin' : isMentor ? 'Mentor' : 'Member';
 
   return (
     <header className="sticky top-0 z-30 bg-white border-b border-slate-200 h-16 flex items-center px-6 gap-4">

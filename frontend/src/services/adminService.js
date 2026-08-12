@@ -8,4 +8,8 @@ export const adminService = {
   updateUser: (id, data) => api.put(`/admin/users/${id}`, data),
   deleteTeam: (id) => api.delete(`/admin/teams/${id}`),
   getActivityLogs: (params) => api.get('/admin/activity-logs', { params }),
+  getMentorManagement: () => api.get('/admin/mentors'),
+  createMentor: (data) => api.post('/admin/mentors', data),
+  assignMentorToTeam: (data) => api.post('/admin/mentors/assign', data),
+  removeMentorFromTeam: (teamId, mentorId) => api.delete(`/admin/mentors/${teamId}/${mentorId}`),
 };

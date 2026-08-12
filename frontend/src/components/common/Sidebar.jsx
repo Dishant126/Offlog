@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { LayoutDashboard, Users, Clock, Bell, Settings, Shield, LogOut } from 'lucide-react';
+import { LayoutDashboard, Users, Clock, Bell, Settings, Shield, LogOut, Sparkles } from 'lucide-react';
 
 export default function Sidebar({ unreadNotifications = 0, pendingRequests = 0 }) {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, isAdmin, isMentor } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);

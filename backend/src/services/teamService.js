@@ -4,7 +4,10 @@ import JoinRequest from '../models/JoinRequest.js';
 import User from '../models/User.js';
 import Notification from '../models/Notification.js';
 import ActivityLog from '../models/ActivityLog.js';
+import Project from '../models/Project.js';
 import { generateUniqueJoinCode } from '../utils/helpers.js';
+import { ensureMentorTeamAccess } from '../utils/mentorAccess.js';
+import { canManageMemberRoles } from '../utils/roleUtils.js';
 
 export const createTeam = async (teamData, userId) => {
   const { name, description, visibility } = teamData;
@@ -25,6 +28,14 @@ export const createTeam = async (teamData, userId) => {
     role: 'TEAM_LEADER'
   });
 
+  await Project.create({
+    team: team._id,
+    name: `${team.name} Project`,
+    description: 'Project created for this team.',
+    status: 'NOT_STARTED',
+    progress: 0
+  });
+
   await ActivityLog.create({
     user: userId,
     action: 'TEAM_CREATED',
@@ -36,12 +47,16 @@ export const createTeam = async (teamData, userId) => {
   return team;
 };
 
-export const getTeamById = async (teamId, userId) => {
+export const getTeamById = async (teamId, userId, currentUser = null) => {
   const team = await Team.findById(teamId)
     .populate('createdBy', 'name email avatar');
 
   if (!team) {
     throw new Error('Team not found');
+  }
+
+  if (currentUser?.role === 'MENTOR') {
+    await ensureMentorTeamAccess(currentUser._id, teamId);
   }
 
   // Get members with user details
@@ -56,7 +71,7 @@ export const getTeamById = async (teamId, userId) => {
   return { team, members, userRole };
 };
 
-export const getUserTeams = async (userId) => {
+export const getUserTeams = async (userId, userRole = null) => {
   const memberships = await TeamMember.find({ user: userId })
     .populate({
       path: 'team',
@@ -66,6 +81,10 @@ export const getUserTeams = async (userId) => {
       ]
     })
     .sort({ joinedAt: -1 });
+
+  if (userRole === 'MENTOR') {
+    return memberships.filter((membership) => membership.role === 'MENTOR');
+  }
 
   return memberships;
 };
@@ -449,8 +468,12 @@ export const removeMember = async (teamId, memberId, userId) => {
 
 export const updateMemberRole = async (teamId, memberId, newRole, userId) => {
   const membership = await TeamMember.findOne({ team: teamId, user: userId });
-  if (!membership || membership.role !== 'TEAM_LEADER') {
-    throw new Error('Only team leader can change roles');
+  const actorRole = membership?.role || 'MEMBER';
+  const actorUser = await User.findById(userId).select('role');
+  const effectiveRole = actorUser?.role === 'MENTOR' ? 'MENTOR' : actorRole;
+
+  if (!membership || !canManageMemberRoles(effectiveRole, membership.role, newRole)) {
+    throw new Error('Not authorized to change roles');
   }
 
   const targetMember = await TeamMember.findOne({ team: teamId, user: memberId }).populate('user', 'name');
@@ -458,6 +481,10 @@ export const updateMemberRole = async (teamId, memberId, newRole, userId) => {
 
   if (targetMember.role === 'TEAM_LEADER') {
     throw new Error('Cannot change team leader role directly. Use transfer leadership.');
+  }
+
+  if (effectiveRole === 'MENTOR' && !['MEMBER', 'MENTOR'].includes(newRole)) {
+    throw new Error('Mentors can only change member roles to member or mentor');
   }
 
   const oldRole = targetMember.role;
@@ -587,7 +614,11 @@ export const leaveTeam = async (teamId, userId) => {
   return { left: true, teamDeleted: false };
 };
 
-export const getTeamActivities = async (teamId) => {
+export const getTeamActivities = async (teamId, currentUser = null) => {
+  if (currentUser?.role === 'MENTOR') {
+    await ensureMentorTeamAccess(currentUser._id, teamId);
+  }
+
   const logs = await ActivityLog.find({
     $or: [
       { targetId: teamId },

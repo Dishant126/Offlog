@@ -51,3 +51,10 @@ export const adminOnly = (req, res, next) => {
   }
   next();
 };
+
+export const mentorOrAdmin = (req, res, next) => {
+  if (req.user.role !== 'ADMIN' && req.user.role !== 'MENTOR') {
+    return errorResponse(res, 'Access denied. Mentor or admin only.', 403);
+  }
+  next();
+};

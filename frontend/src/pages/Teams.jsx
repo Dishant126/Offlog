@@ -23,7 +23,7 @@ function getInitials(name) {
   return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
 }
 
-function TeamCard({ team, membership, index, currentUserId, onJoinPublic, isPublicSection = false }) {
+function TeamCard({ team, membership, index, currentUserId, onJoinPublic, isMentor = false }) {
   const colorSet = teamColors[index % teamColors.length];
   
   // Calculate role label
@@ -124,7 +124,7 @@ function TeamCard({ team, membership, index, currentUserId, onJoinPublic, isPubl
         </div>
 
         {/* Action Link or Join Button */}
-        {membership ? (
+        {membership || isMentor ? (
           <Link
             to={`/teams/${team._id}`}
             className="inline-flex items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-700 transition-colors group/btn"
@@ -146,7 +146,7 @@ function TeamCard({ team, membership, index, currentUserId, onJoinPublic, isPubl
 }
 
 export default function Teams() {
-  const { user } = useAuth();
+  const { user, isMentor } = useAuth();
   const [myMemberships, setMyMemberships] = useState([]);
   const [publicTeams, setPublicTeams] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -160,10 +160,17 @@ export default function Teams() {
   const [joinMsg, setJoinMsg] = useState('');
   const { success, error: toastError } = useToast();
 
-  useEffect(() => { fetchTeams(); }, []);
+  useEffect(() => { fetchTeams(); }, [isMentor]);
 
   const fetchTeams = async () => {
     try {
+      if (isMentor) {
+        const res = await teamService.getMyTeams();
+        setMyMemberships(res.data?.data ?? res.data ?? []);
+        setPublicTeams([]);
+        return;
+      }
+
       const [myRes, publicRes] = await Promise.all([
         teamService.getMyTeams(),
         teamService.getPublic()
@@ -230,12 +237,14 @@ export default function Teams() {
   const joinedTeamIds = new Set(myMemberships.map(m => m.team?._id));
 
   // Build unified list of teams with membership metadata attached
-  const allTeamsList = [
-    ...myMemberships.map(m => ({ team: m.team, membership: m })),
-    ...publicTeams
-      .filter(t => !joinedTeamIds.has(t._id))
-      .map(t => ({ team: t, membership: null }))
-  ];
+  const allTeamsList = isMentor
+    ? myMemberships.map(m => ({ team: m.team, membership: m }))
+    : [
+        ...myMemberships.map(m => ({ team: m.team, membership: m })),
+        ...publicTeams
+          .filter(t => !joinedTeamIds.has(t._id))
+          .map(t => ({ team: t, membership: null }))
+      ];
 
   // Filter based on active tab and search query
   const filteredTeams = allTeamsList.filter(({ team, membership }) => {
@@ -244,6 +253,10 @@ export default function Teams() {
 
     if (!matchesSearch) return false;
 
+    if (isMentor) {
+      return !!membership;
+    }
+
     if (activeFilter === 'My Teams') return !!membership;
     if (activeFilter === 'Teams I Lead') return membership?.role === 'TEAM_LEADER' || team.createdBy?._id === user?._id;
     if (activeFilter === 'Public') return team.visibility === 'PUBLIC';
@@ -251,7 +264,7 @@ export default function Teams() {
     return true; // All
   });
 
-  const filters = ['All', 'My Teams', 'Teams I Lead', 'Public', 'Private'];
+  const filters = isMentor ? ['All'] : ['All', 'My Teams', 'Teams I Lead', 'Public', 'Private'];
 
   if (loading) return <div className="flex items-center justify-center py-20"><Loader size="lg" /></div>;
 
@@ -261,16 +274,18 @@ export default function Teams() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="page-title">Teams</h1>
-          <p className="text-slate-500 text-sm mt-1">Manage your teams, members, and collaboration.</p>
+          <p className="text-slate-500 text-sm mt-1">{isMentor ? 'Your assigned teams and delivery workspace.' : 'Manage your teams, members, and collaboration.'}</p>
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => setShowJoin(true)} className="btn-secondary flex items-center gap-2">
-            <Hash className="h-4 w-4" /> Join by Code
-          </button>
-          <button onClick={() => setShowCreate(true)} className="btn-primary flex items-center gap-2">
-            <Plus className="h-4 w-4" /> Create Team
-          </button>
-        </div>
+        {!isMentor && (
+          <div className="flex gap-2">
+            <button onClick={() => setShowJoin(true)} className="btn-secondary flex items-center gap-2">
+              <Hash className="h-4 w-4" /> Join by Code
+            </button>
+            <button onClick={() => setShowCreate(true)} className="btn-primary flex items-center gap-2">
+              <Plus className="h-4 w-4" /> Create Team
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── Search Bar & Filter Tabs ── */}
@@ -311,10 +326,12 @@ export default function Teams() {
           <Users className="h-12 w-12 mx-auto text-slate-300 mb-3" />
           <p className="font-semibold text-slate-700">No teams found</p>
           <p className="text-xs text-slate-400 mt-1">Try adjusting your search or filter options</p>
-          <div className="flex items-center justify-center gap-3 mt-5">
-            <button onClick={() => setShowCreate(true)} className="btn-primary btn-sm">Create Team</button>
-            <button onClick={() => setShowJoin(true)} className="btn-secondary btn-sm">Join by Code</button>
-          </div>
+          {!isMentor && (
+            <div className="flex items-center justify-center gap-3 mt-5">
+              <button onClick={() => setShowCreate(true)} className="btn-primary btn-sm">Create Team</button>
+              <button onClick={() => setShowJoin(true)} className="btn-secondary btn-sm">Join by Code</button>
+            </div>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-5">
@@ -326,6 +343,7 @@ export default function Teams() {
               index={idx}
               currentUserId={user?._id}
               onJoinPublic={handlePublicJoin}
+              isMentor={isMentor}
             />
           ))}
         </div>

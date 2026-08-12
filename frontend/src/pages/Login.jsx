@@ -23,7 +23,7 @@ export default function Login() {
     setLoading(true);
     try {
       const user = await login(formData.email, formData.password);
-      navigate(user.role === 'ADMIN' ? '/admin' : '/dashboard');
+      navigate(user.role === 'ADMIN' ? '/admin' : user.role === 'MENTOR' ? '/dashboard' : '/dashboard');
     } catch (err) {
       toastError(err.response?.data?.message || 'Invalid email or password');
     } finally {

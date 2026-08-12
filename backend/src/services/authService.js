@@ -31,15 +31,18 @@ export const clearTokenCookie = (res) => {
   });
 };
 
+import { normalizeSignupRole } from '../utils/roleUtils.js';
+
 export const registerUser = async (userData) => {
-  const { name, email, password } = userData;
+  const { name, email, password, role } = userData;
 
   const userExists = await User.findOne({ email });
   if (userExists) {
     throw new Error('User already exists with this email');
   }
 
-  const user = await User.create({ name, email, password });
+  const normalizedRole = normalizeSignupRole(role);
+  const user = await User.create({ name, email, password, role: normalizedRole });
   return user;
 };
 

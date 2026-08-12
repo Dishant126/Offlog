@@ -12,7 +12,7 @@ const perks = [
 ];
 
 export default function Register() {
-  const [formData, setFormData] = useState({ name: '', email: '', password: '', confirmPassword: '' });
+  const [formData, setFormData] = useState({ name: '', email: '', password: '', confirmPassword: '', role: 'USER' });
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
@@ -30,8 +30,8 @@ export default function Register() {
     }
     setLoading(true);
     try {
-      await register(formData.name, formData.email, formData.password);
-      navigate('/dashboard');
+      await register(formData.name, formData.email, formData.password, formData.role);
+      navigate(formData.role === 'MENTOR' ? '/dashboard' : '/dashboard');
     } catch (err) {
       toastError(err.response?.data?.message || 'Registration failed');
     } finally {
@@ -133,6 +133,13 @@ export default function Register() {
                   required
                   autoComplete="email"
                 />
+              </div>
+            </div>
+
+            <div>
+              <label className="label">Account Type</label>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
+                New accounts are created as members. Mentors must be created by an administrator.
               </div>
             </div>
 

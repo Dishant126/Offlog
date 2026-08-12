@@ -14,7 +14,7 @@ export const createTeam = async (req, res, next) => {
 export const getTeam = async (req, res, next) => {
   try {
     const { teamId } = req.params;
-    const result = await teamService.getTeamById(teamId, req.user._id.toString());
+    const result = await teamService.getTeamById(teamId, req.user._id.toString(), req.user);
     successResponse(res, result);
   } catch (error) {
     next(error);
@@ -23,7 +23,7 @@ export const getTeam = async (req, res, next) => {
 
 export const getMyTeams = async (req, res, next) => {
   try {
-    const teams = await teamService.getUserTeams(req.user._id);
+    const teams = await teamService.getUserTeams(req.user._id, req.user.role);
     successResponse(res, teams);
   } catch (error) {
     next(error);
@@ -176,7 +176,7 @@ export const leaveTeam = async (req, res, next) => {
 export const getTeamActivities = async (req, res, next) => {
   try {
     const { teamId } = req.params;
-    const activities = await teamService.getTeamActivities(teamId);
+    const activities = await teamService.getTeamActivities(teamId, req.user);
     successResponse(res, activities);
   } catch (error) {
     next(error);

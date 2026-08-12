@@ -6,7 +6,7 @@ import { useToast } from '../hooks/useToast';
 import Loader from '../components/common/Loader';
 import {
   User, Mail, FileText, Lock, Camera, Save,
-  Shield, Eye, EyeOff, ChevronRight
+  Shield, Eye, EyeOff, ChevronRight, UserCheck
 } from 'lucide-react';
 
 export default function Profile() {
@@ -122,8 +122,14 @@ export default function Profile() {
             <h2 className="text-xl font-bold text-slate-900 mt-2">{profile?.name}</h2>
             <p className="text-slate-500 text-sm mt-0.5">{profile?.email}</p>
             <div className="mt-3 flex items-center justify-center gap-2">
-              <span className={profile?.role === 'ADMIN' ? 'badge badge-admin' : 'badge badge-member'}>
-                {profile?.role === 'ADMIN' ? <Shield className="h-3 w-3" /> : <User className="h-3 w-3" />}
+              <span className={
+                profile?.role === 'ADMIN'
+                  ? 'badge badge-admin'
+                  : profile?.role === 'MENTOR'
+                    ? 'badge badge-mentor'
+                    : 'badge badge-member'
+              }>
+                {profile?.role === 'ADMIN' ? <Shield className="h-3 w-3" /> : profile?.role === 'MENTOR' ? <UserCheck className="h-3 w-3" /> : <User className="h-3 w-3" />}
                 {profile?.role}
               </span>
             </div>

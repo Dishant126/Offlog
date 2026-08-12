@@ -8,10 +8,12 @@ import { useToast } from '../hooks/useToast';
 import Loader from '../components/common/Loader';
 import MountainIllustration from '../components/common/MountainIllustration';
 import Modal from '../components/common/Modal';
+import { api } from '../services/api';
 import {
   Users, Bell, Clock, ArrowRight, Crown, UserCheck,
   CheckCircle, X, Plus, ChevronDown, Hash,
-  UserPlus, Flag, Calendar, Award, Trash2, CheckCheck
+  UserPlus, Flag, Calendar, Award, Trash2, CheckCheck,
+  Briefcase, ClipboardList, Sparkles, CalendarDays
 } from 'lucide-react';
 
 /* ── Helpers ── */
@@ -31,6 +33,14 @@ const teamColors = [
 ];
 
 const teamIcons = ['DS', '</>', '📣', '🛡️', '🔬', '📊', '🎨', '⚡'];
+
+const statusStyles = {
+  NOT_STARTED: 'bg-slate-100 text-slate-600',
+  IN_PROGRESS: 'bg-blue-50 text-blue-700',
+  COMPLETED: 'bg-emerald-50 text-emerald-700',
+  ON_HOLD: 'bg-amber-50 text-amber-700',
+  BLOCKED: 'bg-rose-50 text-rose-700',
+};
 
 function getGreeting() {
   const hour = new Date().getHours();
@@ -53,6 +63,10 @@ function timeAgo(dateStr) {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
+}
+
+function formatStatus(status) {
+  return status?.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()) || 'Not Started';
 }
 
 /* ── Stat Card ── */
@@ -210,9 +224,10 @@ function ActivityItem({ notification, index, onDismiss }) {
 
 /* ── Main Dashboard ── */
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, isMentor } = useAuth();
   const location = useLocation();
   const [data, setData] = useState(null);
+  const [mentorDashboard, setMentorDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [joinCode, setJoinCode] = useState('');
   const [joining, setJoining] = useState(false);
@@ -220,7 +235,7 @@ export default function Dashboard() {
   const [creating, setCreating] = useState(false);
   const { success, error: toastError } = useToast();
 
-  useEffect(() => { fetchDashboard(); }, []);
+  useEffect(() => { fetchDashboard(); }, [isMentor]);
 
   // Handle hash scrolling (e.g. #pending-requests or #recent-activity)
   useEffect(() => {
@@ -237,8 +252,16 @@ export default function Dashboard() {
 
   const fetchDashboard = async () => {
     try {
-      const res = await userService.getDashboard();
-      setData(res.data?.data ?? res.data);
+      setLoading(true);
+      if (isMentor) {
+        const res = await api.get('/mentors/dashboard');
+        setMentorDashboard(res.data?.data ?? res.data);
+        setData(null);
+      } else {
+        const res = await userService.getDashboard();
+        setData(res.data?.data ?? res.data);
+        setMentorDashboard(null);
+      }
     } catch {
       toastError('Failed to load dashboard');
     } finally {
@@ -361,12 +384,124 @@ export default function Dashboard() {
   };
 
   if (loading) return <div className="flex items-center justify-center py-20"><Loader size="lg" /></div>;
-  if (!data) return <div className="page-wrapper text-slate-500">Failed to load dashboard.</div>;
+  if (!isMentor && !data) return <div className="page-wrapper text-slate-500">Failed to load dashboard.</div>;
+  if (isMentor && !mentorDashboard) return <div className="page-wrapper text-slate-500">No mentor dashboard data available.</div>;
 
-  const { teams = [], pendingRequests = [], incomingRequests = [], notifications = [], unreadCount = 0 } = data;
-  const displayUser = data.user ?? user;
+  const { teams = [], pendingRequests = [], incomingRequests = [], notifications = [], unreadCount = 0 } = data || {};
+  const displayUser = data?.user ?? user;
   const firstName = displayUser?.name?.split(' ')[0] ?? 'there';
   const totalPendingCount = pendingRequests.length + incomingRequests.length;
+
+  if (isMentor) {
+    const mentorTeams = mentorDashboard?.teams || [];
+    const mentorStats = mentorDashboard?.stats || {};
+    const upcomingDeadlines = [...mentorTeams]
+      .filter((team) => team.dueDate)
+      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
+      .slice(0, 5);
+
+    return (
+      <div className="page-wrapper">
+        <div className="relative mb-8 overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 relative z-10">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
+                {getGreeting()}, {firstName}! <span className="inline-block animate-[wave_1.5s_ease-in-out_infinite]">👋</span>
+              </h1>
+              <p className="text-slate-500 mt-1">Your assigned team portfolio and delivery progress.</p>
+            </div>
+          </div>
+          <div className="absolute top-0 right-0 w-[55%] h-full pointer-events-none hidden md:block" style={{ opacity: 0.7 }}>
+            <MountainIllustration className="w-full h-full" />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <StatCard icon={Users} value={mentorStats.totalTeams ?? 0} label="Assigned Teams" sublabel="Managed by admin" iconBg="bg-blue-50" iconColor="text-blue-600" delay={0} />
+          <StatCard icon={Briefcase} value={mentorStats.totalMembers ?? 0} label="Total Members" sublabel="Across your teams" iconBg="bg-emerald-50" iconColor="text-emerald-600" delay={75} />
+          <StatCard icon={ClipboardList} value={mentorStats.totalActiveProjects ?? 0} label="Active Projects" sublabel="In progress" iconBg="bg-purple-50" iconColor="text-purple-600" delay={150} />
+          <StatCard icon={CalendarDays} value={mentorStats.upcomingDeadlines ?? 0} label="Upcoming Deadlines" sublabel="Next milestones" iconBg="bg-amber-50" iconColor="text-amber-600" delay={225} />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+          <div className="lg:col-span-3 space-y-6">
+            <div className="card p-0">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+                <h2 className="section-title">Assigned Teams</h2>
+                <span className="text-sm font-semibold text-slate-500">{mentorTeams.length} teams</span>
+              </div>
+
+              {mentorTeams.length === 0 ? (
+                <div className="px-5 py-12 text-center">
+                  <Users className="h-10 w-10 mx-auto text-slate-300 mb-3" />
+                  <p className="text-slate-500 text-sm">No teams have been assigned to you yet.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {mentorTeams.map((team, idx) => (
+                    <Link key={team._id} to={`/mentor/teams/${team._id}`} className="block group">
+                      <div className="flex flex-col gap-4 px-5 py-4 transition-colors hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-semibold text-slate-900">{team.name}</h3>
+                            <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${statusStyles[team.projectStatus] || statusStyles.NOT_STARTED}`}>
+                              {formatStatus(team.projectStatus)}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-sm text-slate-500">{team.description || 'Assigned team overview and delivery status.'}</p>
+                          <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
+                            <span className="rounded-full bg-slate-100 px-2.5 py-1">Leader: {team.leader?.name || 'Unassigned'}</span>
+                            <span className="rounded-full bg-slate-100 px-2.5 py-1">Members: {team.membersCount}</span>
+                            <span className="rounded-full bg-slate-100 px-2.5 py-1">Project: {team.projectName || 'No project'}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 sm:flex-col sm:items-end">
+                          <div className="min-w-[110px] rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-right">
+                            <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Progress</p>
+                            <p className="text-lg font-semibold text-slate-900">{team.progress ?? 0}%</p>
+                          </div>
+                          <div className="text-sm text-slate-500">
+                            <p className="font-medium text-slate-700">{team.dueDate ? new Date(team.dueDate).toLocaleDateString() : 'No due date'}</p>
+                            <p className="mt-0.5">{team.dueDate ? 'Due date' : 'Milestone pending'}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="lg:col-span-2 space-y-6">
+            <div className="card">
+              <div className="flex items-center gap-2">
+                <CalendarDays className="h-4 w-4 text-primary-600" />
+                <h2 className="section-title">Upcoming Deadlines</h2>
+              </div>
+              {upcomingDeadlines.length === 0 ? (
+                <p className="mt-4 text-sm text-slate-500">No upcoming deadlines yet.</p>
+              ) : (
+                <div className="mt-4 space-y-3">
+                  {upcomingDeadlines.map((team) => (
+                    <div key={team._id} className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-slate-800">{team.name}</p>
+                          <p className="mt-1 text-sm text-slate-500">{team.projectName || 'Project milestone'}</p>
+                        </div>
+                        <span className="text-sm font-semibold text-slate-700">{new Date(team.dueDate).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page-wrapper">
@@ -379,14 +514,16 @@ export default function Dashboard() {
             </h1>
             <p className="text-slate-500 mt-1">Here's what's happening with your teams today.</p>
           </div>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="btn-primary flex items-center gap-2 flex-shrink-0 self-start"
-          >
-            <Plus className="h-4 w-4" />
-            Create Team
-            <ChevronDown className="h-3.5 w-3.5 ml-0.5 opacity-60" />
-          </button>
+          {!isMentor && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="btn-primary flex items-center gap-2 flex-shrink-0 self-start"
+            >
+              <Plus className="h-4 w-4" />
+              Create Team
+              <ChevronDown className="h-3.5 w-3.5 ml-0.5 opacity-60" />
+            </button>
+          )}
         </div>
 
         {/* Mountain illustration */}

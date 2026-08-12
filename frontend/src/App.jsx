@@ -40,8 +40,26 @@ function App() {
         user?.role === 'ADMIN'
           ? <ProtectedPage><AdminDashboard /></ProtectedPage>
           : user
-            ? <Navigate to="/dashboard" replace />
+            ? <Navigate to={user?.role === 'MENTOR' ? '/mentor' : '/dashboard'} replace />
             : <Navigate to="/login" replace />
+      } />
+      <Route path="/mentor"    element={
+        user?.role === 'MENTOR'
+          ? <Navigate to="/dashboard" replace />
+          : user?.role === 'ADMIN'
+            ? <Navigate to="/admin" replace />
+            : user
+              ? <Navigate to="/dashboard" replace />
+              : <Navigate to="/login" replace />
+      } />
+      <Route path="/mentor/teams/:teamId" element={
+        user?.role === 'MENTOR'
+          ? <Navigate to={user ? `/teams/${window.location.pathname.split('/').pop()}` : '/login'} replace />
+          : user?.role === 'ADMIN'
+            ? <Navigate to="/admin" replace />
+            : user
+              ? <Navigate to="/dashboard" replace />
+              : <Navigate to="/login" replace />
       } />
 
       {/* Catch-all */}
