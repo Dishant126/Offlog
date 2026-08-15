@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { LayoutDashboard, Users, Clock, Bell, Settings, Shield, LogOut } from 'lucide-react';
+import { LayoutDashboard, Users, Clock, Bell, Settings, Shield, LogOut, Award } from 'lucide-react';
 
 export default function Sidebar({ unreadNotifications = 0, pendingRequests = 0 }) {
   const { user, logout, isAdmin } = useAuth();
@@ -131,16 +131,28 @@ export default function Sidebar({ unreadNotifications = 0, pendingRequests = 0 }
             );
           })}
 
+          {user?.role === 'MENTOR' && !isAdmin && (
+            <Link
+              to="/mentor"
+              onClick={() => setCollapsed(false)}
+              className={`sidebar-link ${location.pathname.startsWith('/mentor') ? 'sidebar-link-active' : ''}`}
+            >
+              <Award className="w-5 h-5 flex-shrink-0 text-amber-400" />
+              <span className="flex-1">Mentor Panel</span>
+            </Link>
+          )}
+
           {isAdmin && (
             <Link
               to="/admin"
               onClick={() => setCollapsed(false)}
               className={`sidebar-link ${location.pathname === '/admin' ? 'sidebar-link-active' : ''}`}
             >
-              <Shield className="w-5 h-5 flex-shrink-0" />
+              <Shield className="w-5 h-5 flex-shrink-0 text-primary-400" />
               <span className="flex-1">Admin Panel</span>
             </Link>
           )}
+
         </nav>
 
         {/* Bottom sign out button (no redundant user name/role card) */}

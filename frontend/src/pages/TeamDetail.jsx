@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { teamService } from '../services/teamService';
+import { taskService } from '../services/taskService';
 import { useToast } from '../hooks/useToast';
 import Modal from '../components/common/Modal';
 import Loader from '../components/common/Loader';
@@ -11,14 +12,15 @@ import {
   UserX, ArrowUpDown, Copy, Check, User, Globe, Lock,
   RefreshCw, ChevronLeft, Search, Plus, MoreVertical,
   Calendar, Hash, Eye, Clock, CheckCircle, FileText,
-  UserPlus, Flag, Edit3, ShieldAlert
+  UserPlus, Flag, Edit3, ShieldAlert, CheckSquare, Square, Sparkles,
+  Upload, Paperclip, File
 } from 'lucide-react';
 
 /* ── Helpers ── */
 const roleMeta = {
   TEAM_LEADER: { label: 'Team Leader', cls: 'bg-blue-50 text-blue-700 border-blue-100', icon: Crown },
-  MENTOR:      { label: 'Mentor',      cls: 'bg-emerald-50 text-emerald-700 border-emerald-100', icon: UserCheck },
-  MEMBER:      { label: 'Member',      cls: 'bg-slate-100 text-slate-700 border-slate-200', icon: User },
+  MENTOR: { label: 'Mentor', cls: 'bg-emerald-50 text-emerald-700 border-emerald-100', icon: UserCheck },
+  MEMBER: { label: 'Member', cls: 'bg-slate-100 text-slate-700 border-slate-200', icon: User },
 };
 
 function getInitials(name) {
@@ -98,15 +100,16 @@ export default function TeamDetail() {
   const { teamId } = useParams();
   const navigate = useNavigate();
   const { user: authUser } = useAuth();
-  
+
   const [team, setTeam] = useState(null);
   const [members, setMembers] = useState([]);
   const [userRole, setUserRole] = useState(null);
   const [joinRequests, setJoinRequests] = useState([]);
   const [teamActivities, setTeamActivities] = useState([]);
+  const [teamProjects, setTeamProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('Overview');
-  
+
   // UI states
   const [searchMember, setSearchMember] = useState('');
   const [copiedCode, setCopiedCode] = useState(false);
@@ -120,7 +123,103 @@ export default function TeamDetail() {
   const [editForm, setEditForm] = useState({});
   const [saving, setSaving] = useState(false);
 
-  const { success, error: toastError } = useToast();
+  // Task completion modal states
+  const [completeModalOpen, setCompleteModalOpen] = useState(false);
+  const [taskToComplete, setTaskToComplete] = useState(null);
+  const [completionNotes, setCompletionNotes] = useState('');
+  const [completionFile, setCompletionFile] = useState('');
+  const [submittingCompletion, setSubmittingCompletion] = useState(false);
+
+  const handleOpenCompleteModal = (task) => {
+    if (task.status === 'COMPLETED') {
+      handleToggleTaskStatus(task._id, 'COMPLETED');
+    } else {
+      setTaskToComplete(task);
+      setCompletionNotes('');
+      setCompletionFile('');
+      setCompleteModalOpen(true);
+    }
+  };
+
+  const fileInputRef = useRef(null);
+  const [uploadingReportFile, setUploadingReportFile] = useState(false);
+  const [completionFileName, setCompletionFileName] = useState('');
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingReportFile(true);
+    setCompletionFileName(file.name);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await taskService.uploadFile(formData);
+      const data = res.data?.data ?? res.data;
+      const serverUrl = data.url;
+      setCompletionFile(serverUrl);
+      success(`File "${file.name}" uploaded to server!`);
+    } catch (err) {
+      toastError(err.response?.data?.message || 'File upload failed');
+    } finally {
+      setUploadingReportFile(false);
+    }
+  };
+
+  const updateLocalTaskState = (updatedTask, updatedProject) => {
+    setTeamProjects(prevProjects =>
+      prevProjects.map(proj => {
+        const hasTask = proj.tasks?.some(t => t._id === updatedTask._id);
+        if (proj._id === updatedTask.project || hasTask) {
+          const newTasks = (proj.tasks || []).map(t => t._id === updatedTask._id ? updatedTask : t);
+          const doneCount = newTasks.filter(t => t.status === 'COMPLETED').length;
+          const newProgress = newTasks.length > 0 ? Math.round((doneCount / newTasks.length) * 100) : 0;
+          return {
+            ...proj,
+            progress: updatedProject?.progress ?? newProgress,
+            status: updatedProject?.status ?? (newProgress === 100 ? 'COMPLETED' : newProgress > 0 ? 'IN_PROGRESS' : 'NOT_STARTED'),
+            tasks: newTasks
+          };
+        }
+        return proj;
+      })
+    );
+  };
+
+  const handleToggleTaskStatus = async (taskId, currentStatus) => {
+    const nextStatus = currentStatus === 'COMPLETED' ? 'PENDING' : 'COMPLETED';
+    try {
+      const res = await taskService.updateTaskStatus(taskId, nextStatus);
+      const data = res.data?.data ?? res.data;
+      if (data?.task) {
+        updateLocalTaskState(data.task, data.project);
+      }
+      success(`Task marked as ${nextStatus === 'COMPLETED' ? 'Completed' : 'Pending'}`);
+      fetchTeam();
+    } catch {
+      toastError('Failed to update task status');
+    }
+  };
+
+  const handleConfirmTaskCompletion = async (e) => {
+    e.preventDefault();
+    if (!taskToComplete) return;
+    setSubmittingCompletion(true);
+    try {
+      const res = await taskService.updateTaskStatus(taskToComplete._id, 'COMPLETED', completionNotes, completionFile);
+      const data = res.data?.data ?? res.data;
+      if (data?.task) {
+        updateLocalTaskState(data.task, data.project);
+      }
+      success(`Task "${taskToComplete.title}" completed! Progress report updated.`);
+      setCompleteModalOpen(false);
+      setTaskToComplete(null);
+      fetchTeam();
+    } catch (err) {
+      toastError(err.response?.data?.message || 'Failed to complete task');
+    } finally {
+      setSubmittingCompletion(false);
+    }
+  };
 
   useEffect(() => { fetchTeam(); }, [teamId]);
 
@@ -137,6 +236,12 @@ export default function TeamDetail() {
         visibility: d.team.visibility,
         allowJoinRequests: d.team.allowJoinRequests
       });
+
+      // Fetch projects & tasks for team
+      try {
+        const projRes = await taskService.getProjects(teamId);
+        setTeamProjects(projRes.data?.data ?? projRes.data ?? []);
+      } catch { /* ignore */ }
 
       // Fetch real activities for this team
       try {
@@ -265,16 +370,20 @@ export default function TeamDetail() {
   const filteredMembers = members.filter(m => {
     const q = searchMember.toLowerCase();
     return (m.user?.name && m.user.name.toLowerCase().includes(q)) ||
-           (m.user?.email && m.user.email.toLowerCase().includes(q));
+      (m.user?.email && m.user.email.toLowerCase().includes(q));
   });
+
+  const allTeamTasks = teamProjects.flatMap(p => p.tasks || []);
 
   const tabs = [
     { id: 'Overview', label: 'Overview' },
-    { id: 'Members',  label: 'Members', badge: members.length },
+    { id: 'Tasks', label: 'Tasks & Progress', badge: allTeamTasks.length },
+    { id: 'Members', label: 'Members', badge: members.length },
     { id: 'Requests', label: 'Requests', badge: (isLeader || isMentor) ? joinRequests.length : 0 },
     { id: 'Activity', label: 'Activity' },
     { id: 'Settings', label: 'Settings' },
   ];
+
 
   return (
     <div className="page-wrapper">
@@ -311,11 +420,10 @@ export default function TeamDetail() {
                 <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 leading-tight">
                   {team.name}
                 </h1>
-                <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${
-                  team.visibility === 'PUBLIC'
+                <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${team.visibility === 'PUBLIC'
                     ? 'bg-blue-50 text-blue-600 border border-blue-100'
                     : 'bg-slate-100 text-slate-700'
-                }`}>
+                  }`}>
                   {team.visibility === 'PUBLIC' ? <Globe className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
                   {team.visibility}
                 </span>
@@ -415,17 +523,15 @@ export default function TeamDetail() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`pb-3 text-sm font-semibold transition-all relative flex items-center gap-2 whitespace-nowrap ${
-                activeTab === tab.id
+              className={`pb-3 text-sm font-semibold transition-all relative flex items-center gap-2 whitespace-nowrap ${activeTab === tab.id
                   ? 'text-primary-600'
                   : 'text-slate-500 hover:text-slate-800'
-              }`}
+                }`}
             >
               {tab.label}
               {tab.badge !== undefined && tab.badge > 0 && (
-                <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                  activeTab === tab.id ? 'bg-primary-50 text-primary-600' : 'bg-slate-100 text-slate-600'
-                }`}>
+                <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${activeTab === tab.id ? 'bg-primary-50 text-primary-600' : 'bg-slate-100 text-slate-600'
+                  }`}>
                   {tab.badge}
                 </span>
               )}
@@ -672,6 +778,139 @@ export default function TeamDetail() {
               </table>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ════════════ TASKS & PROGRESS TAB ════════════ */}
+      {activeTab === 'Tasks' && (
+        <div className="space-y-6 animate-fade-in">
+          {teamProjects.length === 0 ? (
+            <div className="card text-center py-12 text-slate-400">
+              <CheckCircle className="h-10 w-10 mx-auto text-slate-300 mb-2" />
+              <p className="font-bold text-slate-700 text-sm">No Projects or Tasks assigned yet</p>
+              <p className="text-xs text-slate-400 mt-1">Mentor or Team Leader can assign tasks and projects to this team.</p>
+            </div>
+          ) : (
+            teamProjects.map(proj => {
+              const pTasks = proj.tasks || [];
+              const doneCount = pTasks.filter(t => t.status === 'COMPLETED').length;
+              const calcProgress = proj.progress !== undefined ? proj.progress : (pTasks.length > 0 ? Math.round((doneCount / pTasks.length) * 100) : 0);
+
+              return (
+                <div key={proj._id} className="card p-6 space-y-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-lg font-bold text-slate-900">{proj.name}</h3>
+                        <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-bold ${calcProgress === 100 ? 'bg-emerald-50 text-emerald-700' :
+                            calcProgress > 0 ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'
+                          }`}>
+                          {calcProgress === 100 ? 'COMPLETED' : calcProgress > 0 ? 'IN PROGRESS' : 'NOT STARTED'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-1">{proj.description || 'Team Project'}</p>
+                    </div>
+
+                    <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 px-4 py-2 rounded-xl">
+                      <span className="text-xs font-semibold text-slate-500">Project Progress:</span>
+                      <span className="text-xl font-black text-blue-600">{calcProgress}%</span>
+                    </div>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className="space-y-1">
+                    <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-blue-600 rounded-full transition-all duration-500"
+                        style={{ width: `${calcProgress}%` }}
+                      />
+                    </div>
+                    <p className="text-[11px] text-slate-400 text-right">
+                      {doneCount} of {pTasks.length} tasks completed ({pTasks.length > 0 ? Math.round(100 / pTasks.length) : 0}% per task)
+                    </p>
+                  </div>
+
+                  {/* Tasks List */}
+                  <div className="space-y-2 pt-2">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Team Tasks</h4>
+                    {pTasks.length === 0 ? (
+                      <p className="text-xs text-slate-400 italic">No tasks in this project</p>
+                    ) : (
+                      <div className="divide-y divide-slate-100">
+                        {pTasks.map(t => {
+                          const isDone = t.status === 'COMPLETED';
+                          return (
+                            <div key={t._id} className="py-3 flex items-start justify-between gap-3">
+                              <div className="flex items-start gap-3 min-w-0">
+                                <button
+                                  onClick={() => handleOpenCompleteModal(t)}
+                                  className="mt-0.5 text-slate-400 hover:text-blue-600 transition-colors flex-shrink-0"
+                                >
+                                  {isDone ? (
+                                    <CheckSquare className="h-5 w-5 text-emerald-500" />
+                                  ) : (
+                                    <Square className="h-5 w-5" />
+                                  )}
+                                </button>
+                                <div>
+                                  <p className={`text-sm font-semibold ${isDone ? 'line-through text-slate-400' : 'text-slate-800'}`}>
+                                    {t.title}
+                                  </p>
+                                  {t.description && (
+                                    <p className="text-xs text-slate-500 mt-0.5">{t.description}</p>
+                                  )}
+                                  <div className="flex items-center gap-3 text-[11px] text-slate-400 mt-1 flex-wrap">
+                                    <span>Assigned to: <strong className="text-slate-700">{t.assignedTo?.name || 'Entire Team'}</strong></span>
+                                    {t.deadline && <span>Due: <strong>{new Date(t.deadline).toLocaleDateString()}</strong></span>}
+                                    {isDone && t.completedBy && (
+                                      <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-semibold">
+                                        Completed by: {t.completedBy?.name || 'Team Member'}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {isDone && (t.completionNotes || t.completionFile) && (
+                                    <div className="mt-2 p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs space-y-1">
+                                      {t.completionNotes && (
+                                        <p className="text-slate-700">
+                                          <strong className="text-slate-900">Submitted Report:</strong> {t.completionNotes}
+                                        </p>
+                                      )}
+                                      {t.completionFile && (
+                                        <div className="pt-1">
+                                          <a
+                                            href={t.completionFile.startsWith('http') ? t.completionFile : `http://localhost:5000${t.completionFile}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 font-bold text-xs hover:bg-blue-100 transition-colors border border-blue-200"
+                                          >
+                                            <FileText className="h-4 w-4 text-blue-600" />
+                                            View / Download Uploaded Report PDF ↗
+                                          </a>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              <button
+                                onClick={() => handleOpenCompleteModal(t)}
+                                className={`btn-sm text-xs font-bold rounded-lg px-3 py-1 flex-shrink-0 ${isDone ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'btn-primary'
+                                  }`}
+                              >
+                                {isDone ? 'Completed ✓' : 'Complete & Submit Report'}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       )}
 
@@ -1039,15 +1278,69 @@ export default function TeamDetail() {
         </div>
       </Modal>
 
-      {/* Delete Team Confirmation Modal */}
-      <Modal isOpen={showDeleteModal} onClose={() => setShowDeleteModal(false)} title="Delete Team Permanently">
-        <div className="space-y-4">
-          <p className="text-sm text-slate-600">This action is <strong>irreversible</strong>. Are you sure you want to delete <strong>{team.name}</strong>? All members and requests will be removed.</p>
-          <div className="flex justify-end gap-3 pt-2">
-            <button onClick={() => setShowDeleteModal(false)} className="btn-secondary">Cancel</button>
-            <button onClick={handleDelete} className="btn-danger">Permanently Delete</button>
+      {/* ── Complete Task & Submit Report Modal ── */}
+      <Modal isOpen={completeModalOpen} onClose={() => setCompleteModalOpen(false)} title={`Complete Task: ${taskToComplete?.title || ''}`}>
+        <form onSubmit={handleConfirmTaskCompletion} className="space-y-4">
+          <p className="text-xs text-slate-500">
+            Completing this task will automatically update the team project progress percentage and notify your mentor and team leader.
+          </p>
+
+          <div>
+            <label className="label">Work Summary / Completion Report *</label>
+            <textarea
+              className="input text-xs font-medium"
+              rows={4}
+              placeholder="Describe what was completed, key deliverables, or notes for your mentor..."
+              value={completionNotes}
+              onChange={e => setCompletionNotes(e.target.value)}
+              required
+            />
           </div>
-        </div>
+
+          <div>
+            <label className="label">Report Document / File Attachment (Optional)</label>
+
+            {/* Hidden native File Explorer input */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
+              onChange={handleFileChange}
+            />
+
+            <div className="flex gap-2 items-center">
+              <input
+                type="text"
+                className="input text-xs flex-1"
+                placeholder="File name or URL (e.g. report.pdf)"
+                value={completionFile}
+                onChange={e => setCompletionFile(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="btn-secondary text-xs py-2.5 px-3 flex items-center gap-1.5 whitespace-nowrap bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 font-bold"
+              >
+                <Upload className="h-4 w-4" />
+                Browse File Explorer
+              </button>
+            </div>
+            {completionFile && (
+              <p className="text-[11px] text-emerald-600 font-semibold mt-1 flex items-center gap-1">
+                <File className="h-3 w-3" /> Selected: {completionFile}
+              </p>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={() => setCompleteModalOpen(false)} className="btn-secondary text-xs">
+              Cancel
+            </button>
+            <button type="submit" disabled={submittingCompletion} className="btn-primary text-xs font-bold">
+              {submittingCompletion ? <Loader size="sm" className="border-white/40 border-t-white" /> : 'Submit Report & Complete Task'}
+            </button>
+          </div>
+        </form>
       </Modal>
     </div>
   );

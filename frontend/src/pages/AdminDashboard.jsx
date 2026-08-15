@@ -6,10 +6,9 @@ import Loader from '../components/common/Loader';
 import {
   Users, Shield, Activity, Search, Trash2, Edit2,
   ChevronLeft, ChevronRight, BarChart3, Clock,
-  UserCheck, Globe, TrendingUp, AlertTriangle
+  UserCheck, Globe, TrendingUp, Plus, Award, UserPlus,
+  UserCheck as MentorIcon, X
 } from 'lucide-react';
-
-// ── Helpers ────────────────────────────────────────────────────────────────
 
 const unwrap = (res) => res.data?.data ?? res.data;
 
@@ -39,28 +38,39 @@ const ACTION_COLORS = {
   MEMBER_REMOVED:       'bg-amber-50 text-amber-700',
   PROFILE_UPDATED:      'bg-sky-50 text-sky-700',
   PASSWORD_CHANGED:     'bg-amber-50 text-amber-700',
-  LEADERSHIP_TRANSFERRED:'bg-purple-50 text-purple-700',
+  ADMIN_CREATED_USER:   'bg-emerald-50 text-emerald-700',
+  ADMIN_ASSIGNED_MENTOR:'bg-amber-50 text-amber-700',
   ADMIN_DELETED_USER:   'bg-red-50 text-red-700',
   ADMIN_DELETED_TEAM:   'bg-red-50 text-red-700',
 };
-
-// ── Main Component ─────────────────────────────────────────────────────────
 
 export default function AdminDashboard() {
   const [stats, setStats]       = useState(null);
   const [users, setUsers]       = useState([]);
   const [teams, setTeams]       = useState([]);
+  const [mentorAssignments, setMentorAssignments] = useState([]);
   const [logs,  setLogs]        = useState([]);
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading]   = useState(true);
   const [search, setSearch]     = useState('');
   const [page, setPage]         = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+
+  // Form states for Mentor Management (Matching Screenshot 1 & 2)
+  const [createMentorForm, setCreateMentorForm] = useState({ name: '', email: '', password: '' });
+  const [creatingMentor, setCreatingMentor] = useState(false);
+
+  const [assignForm, setAssignForm] = useState({ teamId: '', mentorId: '' });
+  const [assigningMentor, setAssigningMentor] = useState(false);
+
+  // Modals
   const [showEditUser, setShowEditUser] = useState(false);
   const [editUserData, setEditUserData] = useState(null);
-  const { success, error: toastError } = useToast();
+  const [showCreateUser, setShowCreateUser] = useState(false);
+  const [createUserData, setCreateUserData] = useState({ name: '', email: '', password: '', role: 'MENTOR', bio: '' });
+  const [creatingUser, setCreatingUser] = useState(false);
 
-  // ── Fetch functions ────────────────────────────────────────────────────
+  const { success, error: toastError } = useToast();
 
   const fetchStats = useCallback(async () => {
     try {
@@ -71,7 +81,7 @@ export default function AdminDashboard() {
 
   const fetchUsers = useCallback(async (pg = 1, srch = '') => {
     try {
-      const res = await adminService.getUsers({ page: pg, limit: 10, search: srch });
+      const res = await adminService.getUsers({ page: pg, limit: 50, search: srch });
       const data = unwrap(res);
       setUsers(data?.users ?? []);
       setTotalPages(data?.pages ?? 1);
@@ -80,9 +90,16 @@ export default function AdminDashboard() {
 
   const fetchTeams = useCallback(async (pg = 1, srch = '') => {
     try {
-      const res = await adminService.getTeams({ page: pg, limit: 10, search: srch });
+      const res = await adminService.getTeams({ page: pg, limit: 50, search: srch });
       const data = unwrap(res);
       setTeams(data?.teams ?? []);
+    } catch { /* ignore */ }
+  }, []);
+
+  const fetchMentorAssignments = useCallback(async () => {
+    try {
+      const res = await adminService.getMentorAssignments();
+      setMentorAssignments(unwrap(res));
     } catch { /* ignore */ }
   }, []);
 
@@ -96,12 +113,67 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     (async () => {
-      await Promise.all([fetchStats(), fetchUsers(), fetchTeams(), fetchLogs()]);
+      await Promise.all([fetchStats(), fetchUsers(), fetchTeams(), fetchMentorAssignments(), fetchLogs()]);
       setLoading(false);
     })();
   }, []);
 
-  // ── Actions ────────────────────────────────────────────────────────────
+  const handleCreateMentorDirect = async (e) => {
+    e.preventDefault();
+    if (!createMentorForm.name || !createMentorForm.email || !createMentorForm.password) {
+      toastError('Please fill out all mentor fields');
+      return;
+    }
+    setCreatingMentor(true);
+    try {
+      await adminService.createUser({
+        name: createMentorForm.name,
+        email: createMentorForm.email,
+        password: createMentorForm.password,
+        role: 'MENTOR'
+      });
+      success(`Mentor account "${createMentorForm.name}" created successfully!`);
+      setCreateMentorForm({ name: '', email: '', password: '' });
+      fetchUsers();
+      fetchStats();
+      fetchMentorAssignments();
+    } catch (err) {
+      toastError(err.response?.data?.message || 'Failed to create mentor');
+    } finally {
+      setCreatingMentor(false);
+    }
+  };
+
+  const handleAssignMentorDirect = async (e) => {
+    e.preventDefault();
+    if (!assignForm.teamId || !assignForm.mentorId) {
+      toastError('Please select both team and mentor');
+      return;
+    }
+    setAssigningMentor(true);
+    try {
+      await adminService.assignMentor(assignForm.teamId, assignForm.mentorId);
+      success('Mentor assigned to team successfully!');
+      setAssignForm({ teamId: '', mentorId: '' });
+      fetchMentorAssignments();
+      fetchStats();
+    } catch (err) {
+      toastError(err.response?.data?.message || 'Failed to assign mentor');
+    } finally {
+      setAssigningMentor(false);
+    }
+  };
+
+  const handleRemoveMentor = async (teamId, userId) => {
+    if (!window.confirm('Remove mentor from this team?')) return;
+    try {
+      await adminService.removeMentor(teamId, userId);
+      success('Mentor unassigned from team.');
+      fetchMentorAssignments();
+    } catch (err) {
+      toastError('Failed to remove mentor');
+    }
+  };
 
   const handleDeleteUser = async (id) => {
     if (!window.confirm('Delete this user? This cannot be undone.')) return;
@@ -139,8 +211,26 @@ export default function AdminDashboard() {
       success('User updated.');
       setShowEditUser(false);
       fetchUsers(page, search);
+      fetchStats();
     } catch (err) {
       toastError(err.response?.data?.message || 'Update failed');
+    }
+  };
+
+  const handleCreateUser = async (e) => {
+    e.preventDefault();
+    setCreatingUser(true);
+    try {
+      await adminService.createUser(createUserData);
+      success(`New ${createUserData.role} account created successfully!`);
+      setShowCreateUser(false);
+      setCreateUserData({ name: '', email: '', password: '', role: 'MENTOR', bio: '' });
+      fetchUsers(page, search);
+      fetchStats();
+    } catch (err) {
+      toastError(err.response?.data?.message || 'Failed to create account');
+    } finally {
+      setCreatingUser(false);
     }
   };
 
@@ -157,31 +247,32 @@ export default function AdminDashboard() {
     setPage(1);
   };
 
-  // ── Render ─────────────────────────────────────────────────────────────
-
   if (loading) return <div className="flex items-center justify-center py-20"><Loader size="lg" /></div>;
 
   const tabs = [
-    { id: 'overview', label: 'Overview',       icon: BarChart3  },
-    { id: 'users',    label: 'Users',           icon: Users      },
-    { id: 'teams',    label: 'Teams',           icon: Shield     },
-    { id: 'logs',     label: 'Activity Logs',   icon: Activity   },
+    { id: 'overview font-semibold', label: 'Overview', icon: BarChart3 },
+    { id: 'users', label: 'Users', icon: Users },
+    { id: 'teams', label: 'Teams', icon: Shield },
+    { id: 'mentor-management', label: 'Mentor Management', icon: MentorIcon },
+    { id: 'logs', label: 'Activity Logs', icon: Activity },
   ];
 
   return (
     <div className="page-wrapper">
       {/* ── Page Header ── */}
-      <div className="flex items-center gap-3 mb-8">
-        <div className="w-11 h-11 rounded-xl bg-primary-600 flex items-center justify-center">
-          <Shield className="h-5 w-5 text-white" />
-        </div>
-        <div>
-          <h1 className="page-title">Admin Dashboard</h1>
-          <p className="text-slate-500 text-sm">Manage users, teams, and system activity</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-xl bg-blue-600 flex items-center justify-center text-white">
+            <Shield className="h-5 w-5" />
+          </div>
+          <div>
+            <h1 className="page-title text-2xl font-bold text-slate-900">Admin Dashboard</h1>
+            <p className="text-slate-500 text-sm">Manage users, teams, and system activity</p>
+          </div>
         </div>
       </div>
 
-      {/* ── Tabs ── */}
+      {/* ── Tabs (Matching Screenshot 1 & 2) ── */}
       <div className="flex gap-1 mb-6 border-b border-slate-200 overflow-x-auto">
         {tabs.map(({ id, label, icon: Icon }) => (
           <button
@@ -189,7 +280,7 @@ export default function AdminDashboard() {
             onClick={() => switchTab(id)}
             className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 -mb-px transition-all whitespace-nowrap ${
               activeTab === id
-                ? 'border-primary-600 text-primary-600'
+                ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
             }`}
           >
@@ -199,43 +290,213 @@ export default function AdminDashboard() {
         ))}
       </div>
 
-      {/* ── Overview ── */}
+      {/* ════════════ OVERVIEW TAB ════════════ */}
       {activeTab === 'overview' && stats && (
-        <div className="animate-fade-in">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="animate-fade-in space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard icon={Users}     value={stats.totalUsers}        label="Total Users"        iconBg="bg-blue-50"     iconColor="text-blue-600" />
+            <StatCard icon={Award}     value={stats.totalMentors || 0} label="Assigned Mentors"   iconBg="bg-amber-50"    iconColor="text-amber-600" />
             <StatCard icon={Shield}    value={stats.totalTeams}        label="Total Teams"        iconBg="bg-purple-50"   iconColor="text-purple-600" />
-            <StatCard icon={UserCheck} value={stats.totalMembers}      label="Team Memberships"   iconBg="bg-emerald-50"  iconColor="text-emerald-600" />
-            <StatCard icon={Clock}     value={stats.totalJoinRequests} label="Pending Requests"   iconBg="bg-amber-50"    iconColor="text-amber-600" />
+            <StatCard icon={Clock}     value={stats.totalJoinRequests} label="Pending Requests"   iconBg="bg-emerald-50"  iconColor="text-emerald-600" />
           </div>
 
-          {/* Active vs Total users bar */}
           {stats.totalUsers > 0 && (
             <div className="card">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold text-slate-800 flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-primary-500" />
-                  Active Users
+                  <TrendingUp className="h-4 w-4 text-blue-600" />
+                  Active System Accounts
                 </h3>
-                <span className="text-sm font-bold text-primary-600">
+                <span className="text-sm font-bold text-blue-600">
                   {stats.activeUsers} / {stats.totalUsers}
                 </span>
               </div>
               <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-primary-600 rounded-full transition-all duration-500"
+                  className="h-full bg-blue-600 rounded-full transition-all duration-500"
                   style={{ width: `${Math.round((stats.activeUsers / stats.totalUsers) * 100)}%` }}
                 />
               </div>
-              <p className="text-xs text-slate-400 mt-2">
-                {Math.round((stats.activeUsers / stats.totalUsers) * 100)}% of users are currently active
-              </p>
             </div>
           )}
         </div>
       )}
 
-      {/* ── Users / Teams Search Bar ── */}
+      {/* ════════════ MENTOR MANAGEMENT TAB (Matching Screenshot 1 & 2) ════════════ */}
+      {activeTab === 'mentor-management' && (
+        <div className="animate-fade-in space-y-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+            {/* Left Card: + Create Mentor User (Matching Screenshot 1) */}
+            <div className="card p-6 border border-slate-200 shadow-sm bg-white rounded-2xl">
+              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2 mb-5">
+                <UserPlus className="h-4 w-4 text-blue-600" />
+                Create Mentor User
+              </h2>
+
+              <form onSubmit={handleCreateMentorDirect} className="space-y-4">
+                <div>
+                  <input
+                    type="text"
+                    className="input bg-slate-50 text-sm py-2.5 rounded-xl border-slate-200 placeholder-slate-400"
+                    placeholder="Mentor name"
+                    value={createMentorForm.name}
+                    onChange={e => setCreateMentorForm(p => ({ ...p, name: e.target.value }))}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <input
+                    type="email"
+                    className="input bg-slate-50 text-sm py-2.5 rounded-xl border-slate-200 placeholder-slate-400"
+                    placeholder="Mentor email"
+                    value={createMentorForm.email}
+                    onChange={e => setCreateMentorForm(p => ({ ...p, email: e.target.value }))}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <input
+                    type="password"
+                    className="input bg-slate-50 text-sm py-2.5 rounded-xl border-slate-200 placeholder-slate-400"
+                    placeholder="Temporary password"
+                    value={createMentorForm.password}
+                    onChange={e => setCreateMentorForm(p => ({ ...p, password: e.target.value }))}
+                    required
+                    minLength={6}
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={creatingMentor}
+                  className="btn-primary py-2.5 px-6 rounded-xl font-bold text-sm"
+                >
+                  {creatingMentor ? <Loader size="sm" className="border-white/40 border-t-white" /> : 'Create Mentor'}
+                </button>
+              </form>
+            </div>
+
+            {/* Right Card: + Assign Mentor to Team (Matching Screenshot 1) */}
+            <div className="card p-6 border border-slate-200 shadow-sm bg-white rounded-2xl">
+              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2 mb-5">
+                <Plus className="h-4 w-4 text-blue-600" />
+                Assign Mentor to Team
+              </h2>
+
+              <form onSubmit={handleAssignMentorDirect} className="space-y-4">
+                <div>
+                  <select
+                    className="input bg-slate-50 text-sm py-2.5 rounded-xl border-slate-200 font-medium"
+                    value={assignForm.teamId}
+                    onChange={e => setAssignForm(p => ({ ...p, teamId: e.target.value }))}
+                    required
+                  >
+                    <option value="">Select team</option>
+                    {teams.map(t => (
+                      <option key={t._id} value={t._id}>{t.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <select
+                    className="input bg-slate-50 text-sm py-2.5 rounded-xl border-slate-200 font-medium"
+                    value={assignForm.mentorId}
+                    onChange={e => setAssignForm(p => ({ ...p, mentorId: e.target.value }))}
+                    required
+                  >
+                    <option value="">Select mentor</option>
+                    {users.filter(u => u.role === 'MENTOR' || u.role === 'ADMIN').map(u => (
+                      <option key={u._id} value={u._id}>
+                        {u.name} ({u.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={assigningMentor}
+                  className="btn-primary py-2.5 px-6 rounded-xl font-bold text-sm"
+                >
+                  {assigningMentor ? <Loader size="sm" className="border-white/40 border-t-white" /> : 'Assign Mentor'}
+                </button>
+              </form>
+            </div>
+
+          </div>
+
+          {/* Mentor Team Assignments Table (Matching Screenshot 1) */}
+          <div className="card p-0 border border-slate-200 shadow-sm bg-white rounded-2xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100">
+              <h3 className="font-bold text-slate-900 text-sm">Mentor Team Assignments</h3>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50/50">
+                    <th className="py-3 px-6">TEAM</th>
+                    <th className="py-3 px-6">MENTORS</th>
+                    <th className="py-3 px-6 text-right">ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-xs font-medium">
+                  {mentorAssignments.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="text-center py-6 text-slate-400">No teams registered yet</td>
+                    </tr>
+                  ) : (
+                    mentorAssignments.map(({ team: t, mentors }) => (
+                      <tr key={t._id} className="hover:bg-slate-50/60">
+                        <td className="py-4 px-6 font-bold text-slate-900 text-sm">
+                          {t.name}
+                        </td>
+                        <td className="py-4 px-6 text-slate-600">
+                          {mentors.length === 0 ? (
+                            <span className="text-slate-400 italic">No mentors assigned</span>
+                          ) : (
+                            <div className="flex flex-wrap gap-1.5">
+                              {mentors.map(m => (
+                                <span key={m._id} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-100">
+                                  {m.name} ({m.email})
+                                  <button
+                                    onClick={() => handleRemoveMentor(t._id, m._id)}
+                                    className="p-0.5 hover:text-red-600 rounded"
+                                    title="Unassign mentor"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-4 px-6 text-right">
+                          <button
+                            onClick={() => {
+                              setAssignForm({ teamId: t._id, mentorId: '' });
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
+                            className="btn-secondary btn-sm text-xs font-semibold"
+                          >
+                            + Assign Mentor
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════ USERS & TEAMS SEARCH / TABLES ════════════ */}
       {(activeTab === 'users' || activeTab === 'teams') && (
         <div className="animate-fade-in">
           <form onSubmit={handleSearch} className="mb-5 flex gap-2">
@@ -278,7 +539,7 @@ export default function AdminDashboard() {
                             {u.avatar ? (
                               <img src={u.avatar} alt="" className="h-8 w-8 rounded-full object-cover" />
                             ) : (
-                              <div className="h-8 w-8 rounded-full bg-primary-600 flex items-center justify-center flex-shrink-0">
+                              <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
                                 <span className="text-white text-xs font-bold">
                                   {u.name?.[0]?.toUpperCase() ?? '?'}
                                 </span>
@@ -291,7 +552,10 @@ export default function AdminDashboard() {
                           </div>
                         </td>
                         <td>
-                          <span className={u.role === 'ADMIN' ? 'badge badge-admin' : 'badge badge-member'}>
+                          <span className={`badge ${
+                            u.role === 'ADMIN' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                            u.role === 'MENTOR' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-100 text-slate-600'
+                          }`}>
                             {u.role}
                           </span>
                         </td>
@@ -308,7 +572,7 @@ export default function AdminDashboard() {
                             <button
                               onClick={() => { setEditUserData(u); setShowEditUser(true); }}
                               className="btn-icon btn-ghost"
-                              title="Edit"
+                              title="Edit User Role"
                             >
                               <Edit2 className="h-3.5 w-3.5" />
                             </button>
@@ -326,29 +590,6 @@ export default function AdminDashboard() {
                   </tbody>
                 </table>
               </div>
-
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100">
-                  <span className="text-xs text-slate-500">Page {page} of {totalPages}</span>
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => { const p = page - 1; setPage(p); fetchUsers(p, search); }}
-                      disabled={page <= 1}
-                      className="btn-icon btn-secondary btn-sm disabled:opacity-40"
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => { const p = page + 1; setPage(p); fetchUsers(p, search); }}
-                      disabled={page >= totalPages}
-                      className="btn-icon btn-secondary btn-sm disabled:opacity-40"
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
@@ -362,14 +603,13 @@ export default function AdminDashboard() {
                       <th>Team</th>
                       <th>Visibility</th>
                       <th>Created By</th>
-                      <th>Created</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {teams.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="text-center py-8 text-slate-400">No teams found</td>
+                        <td colSpan={4} className="text-center py-8 text-slate-400">No teams found</td>
                       </tr>
                     ) : teams.map(t => (
                       <tr key={t._id}>
@@ -392,9 +632,6 @@ export default function AdminDashboard() {
                           </span>
                         </td>
                         <td className="text-slate-600 text-sm">{t.createdBy?.name ?? '—'}</td>
-                        <td className="text-slate-400 text-xs">
-                          {new Date(t.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
-                        </td>
                         <td>
                           <button
                             onClick={() => handleDeleteTeam(t._id)}
@@ -414,14 +651,13 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* ── Activity Logs ── */}
+      {/* ════════════ ACTIVITY LOGS ════════════ */}
       {activeTab === 'logs' && (
         <div className="animate-fade-in card p-0 overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-100">
             <h3 className="font-bold text-slate-900 flex items-center gap-2">
-              <Activity className="h-4 w-4 text-primary-500" />
-              Recent Activity
-              <span className="text-slate-400 font-normal text-sm">({logs.length} entries)</span>
+              <Activity className="h-4 w-4 text-blue-600" />
+              Recent Activity Logs
             </h3>
           </div>
           <div className="overflow-x-auto">
@@ -473,7 +709,7 @@ export default function AdminDashboard() {
       )}
 
       {/* ── Edit User Modal ── */}
-      <Modal isOpen={showEditUser} onClose={() => setShowEditUser(false)} title="Edit User">
+      <Modal isOpen={showEditUser} onClose={() => setShowEditUser(false)} title="Edit User Account">
         {editUserData && (
           <form onSubmit={handleUpdateUser} className="space-y-4">
             <div>
@@ -497,11 +733,12 @@ export default function AdminDashboard() {
             <div>
               <label className="label">Role</label>
               <select
-                className="input"
+                className="input font-medium"
                 value={editUserData.role}
                 onChange={e => setEditUserData(p => ({ ...p, role: e.target.value }))}
               >
                 <option value="USER">USER</option>
+                <option value="MENTOR">MENTOR</option>
                 <option value="ADMIN">ADMIN</option>
               </select>
             </div>
@@ -513,7 +750,7 @@ export default function AdminDashboard() {
                   checked={editUserData.isActive}
                   onChange={e => setEditUserData(p => ({ ...p, isActive: e.target.checked }))}
                 />
-                <div className="w-10 h-5 bg-slate-200 rounded-full peer peer-checked:bg-primary-600 transition-colors" />
+                <div className="w-10 h-5 bg-slate-200 rounded-full peer peer-checked:bg-blue-600 transition-colors" />
                 <div className="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5" />
               </div>
               <span className="text-sm font-medium text-slate-700">Account Active</span>

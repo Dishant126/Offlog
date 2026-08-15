@@ -165,81 +165,45 @@ export const requestToJoin = async (joinCode, userId, message = '') => {
     throw new Error('You are already a member of this team');
   }
 
-  if (team.visibility === 'PUBLIC') {
-    const membership = await TeamMember.create({
-      user: userId,
-      team: team._id,
-      role: 'MEMBER'
-    });
-
-    const user = await User.findById(userId);
-    const leader = await TeamMember.findOne({ team: team._id, role: 'TEAM_LEADER' });
-    if (leader && user) {
-      await Notification.create({
-        user: leader.user,
-        type: 'TEAM_JOINED',
-        title: 'New Team Member',
-        message: `${user.name} joined ${team.name}`,
-        relatedTeam: team._id,
-        relatedUser: userId
-      });
-    }
-
-    await Notification.create({
-      user: userId,
-      type: 'TEAM_JOINED',
-      title: 'Joined Team',
-      message: `You joined ${team.name}`,
-      relatedTeam: team._id
-    });
-
-    await ActivityLog.create({
-      user: userId,
-      action: 'TEAM_JOINED',
-      targetType: 'TEAM',
-      targetId: team._id,
-      details: { teamId: team._id, teamName: team.name, userName: user?.name }
-    });
-
-    return { joined: true, membership };
-  }
-
-  if (!team.allowJoinRequests) {
-    throw new Error('This team is not accepting join requests');
-  }
-
-  // Check for existing pending request
-  const existingRequest = await JoinRequest.findOne({
-    team: team._id,
-    user: userId,
-    status: 'PENDING'
-  });
-  if (existingRequest) {
-    throw new Error('You already have a pending request for this team');
-  }
-
-  const request = await JoinRequest.create({
+  // Directly join team without requiring approval
+  const membership = await TeamMember.create({
     user: userId,
     team: team._id,
-    message
+    role: 'MEMBER'
   });
 
-  // Notify team leader
+  const user = await User.findById(userId);
   const leader = await TeamMember.findOne({ team: team._id, role: 'TEAM_LEADER' });
-  if (leader) {
-    const user = await User.findById(userId);
+  if (leader && user) {
     await Notification.create({
       user: leader.user,
-      type: 'JOIN_REQUEST',
-      title: 'New Join Request',
-      message: `${user.name} wants to join ${team.name}`,
+      type: 'TEAM_JOINED',
+      title: 'New Team Member',
+      message: `${user.name} joined ${team.name}`,
       relatedTeam: team._id,
       relatedUser: userId
     });
   }
 
-  return { joined: false, request };
+  await Notification.create({
+    user: userId,
+    type: 'TEAM_JOINED',
+    title: 'Joined Team',
+    message: `You joined ${team.name}`,
+    relatedTeam: team._id
+  });
+
+  await ActivityLog.create({
+    user: userId,
+    action: 'TEAM_JOINED',
+    targetType: 'TEAM',
+    targetId: team._id,
+    details: { teamId: team._id, teamName: team.name, userName: user?.name }
+  });
+
+  return { joined: true, membership };
 };
+
 
 export const joinPublicTeam = async (teamId, userId) => {
   const team = await Team.findById(teamId);
