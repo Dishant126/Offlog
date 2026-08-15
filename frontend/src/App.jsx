@@ -8,6 +8,8 @@ import Teams from './pages/Teams'
 import TeamDetail from './pages/TeamDetail'
 import Profile from './pages/Profile'
 import AdminDashboard from './pages/AdminDashboard'
+import MentorDashboard from './pages/MentorDashboard'
+import MentorTeamDetail from './pages/MentorTeamDetail'
 import Loader from './components/common/Loader'
 
 function ProtectedPage({ children }) {
@@ -35,6 +37,8 @@ function App() {
       <Route path="/dashboard" element={user ? <ProtectedPage><Dashboard /></ProtectedPage> : <Navigate to="/login" replace />} />
       <Route path="/teams"     element={user ? <ProtectedPage><Teams /></ProtectedPage>     : <Navigate to="/login" replace />} />
       <Route path="/teams/:teamId" element={user ? <ProtectedPage><TeamDetail /></ProtectedPage> : <Navigate to="/login" replace />} />
+      <Route path="/mentor" element={user ? <ProtectedPage><MentorDashboard /></ProtectedPage> : <Navigate to="/login" replace />} />
+      <Route path="/mentor/teams/:teamId" element={user ? <ProtectedPage><MentorTeamDetail /></ProtectedPage> : <Navigate to="/login" replace />} />
       <Route path="/profile"   element={user ? <ProtectedPage><Profile /></ProtectedPage>   : <Navigate to="/login" replace />} />
       <Route path="/admin"     element={
         user?.role === 'ADMIN'
@@ -50,5 +54,6 @@ function App() {
     </Routes>
   )
 }
+
 
 export default App

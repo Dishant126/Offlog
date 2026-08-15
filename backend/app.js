@@ -11,6 +11,8 @@ import userRoutes from './src/routes/userRoutes.js';
 import teamRoutes from './src/routes/teamRoutes.js';
 import adminRoutes from './src/routes/adminRoutes.js';
 import notificationRoutes from './src/routes/notificationRoutes.js';
+import taskRoutes from './src/routes/taskRoutes.js';
+import mentorRoutes from './src/routes/mentorRoutes.js';
 import errorHandler from './src/middlewares/errorHandler.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -49,6 +51,10 @@ app.use('/api/users', userRoutes);
 app.use('/api/teams', teamRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/tasks', taskRoutes);
+app.use('/api/mentor', mentorRoutes);
+
+
 
 // 404 handler
 app.use((req, res) => {

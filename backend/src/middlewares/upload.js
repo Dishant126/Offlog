@@ -23,21 +23,26 @@ const storage = multer.diskStorage({
   }
 });
 
-const fileFilter = (req, file, cb) => {
-  const allowedTypes = /jpeg|jpg|png|gif|webp/;
+const documentFileFilter = (req, file, cb) => {
+  const allowedTypes = /jpeg|jpg|png|gif|webp|pdf|doc|docx|txt|xls|xlsx|ppt|pptx|zip|rar/;
   const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-  const mimetype = allowedTypes.test(file.mimetype);
 
-  if (extname && mimetype) {
+  if (extname) {
     return cb(null, true);
   }
-  cb(new Error('Only image files are allowed (jpeg, jpg, png, gif, webp)'));
+  cb(new Error('Invalid file type. Allowed: PDF, DOC, DOCX, TXT, XLS, PPT, ZIP, Images'));
 };
 
 export const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
-  fileFilter
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  fileFilter: documentFileFilter
+});
+
+export const documentUpload = multer({
+  storage,
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB
+  fileFilter: documentFileFilter
 });
 
 export const setUploadType = (type) => (req, res, next) => {

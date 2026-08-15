@@ -52,6 +52,50 @@ export const updateUser = async (req, res, next) => {
   }
 };
 
+export const createUser = async (req, res, next) => {
+  try {
+    const user = await adminService.adminCreateUser(req.body);
+    await logActivity(req.user._id, 'ADMIN_CREATED_USER', 'USER', user._id, { role: user.role }, req);
+    successResponse(res, user, 'User created successfully', 201);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const assignMentorToTeam = async (req, res, next) => {
+  try {
+    const { teamId } = req.params;
+    const { userId } = req.body;
+    const member = await adminService.adminAssignMentorToTeam(teamId, userId);
+    await logActivity(req.user._id, 'ADMIN_ASSIGNED_MENTOR', 'TEAM', teamId, { mentorId: userId }, req);
+    successResponse(res, member, 'Mentor assigned to team successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getMentorAssignments = async (req, res, next) => {
+  try {
+    const assignments = await adminService.getMentorAssignments();
+    successResponse(res, assignments);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const removeMentorFromTeam = async (req, res, next) => {
+  try {
+    const { teamId, userId } = req.params;
+    await adminService.adminRemoveMentorFromTeam(teamId, userId);
+    await logActivity(req.user._id, 'ADMIN_REMOVED_MENTOR', 'TEAM', teamId, { mentorId: userId }, req);
+    successResponse(res, null, 'Mentor removed from team');
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+
 export const deleteTeam = async (req, res, next) => {
   try {
     const { teamId } = req.params;

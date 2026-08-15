@@ -1,4 +1,5 @@
 import User from '../models/User.js';
+import Team from '../models/Team.js';
 import TeamMember from '../models/TeamMember.js';
 import JoinRequest from '../models/JoinRequest.js';
 import Notification from '../models/Notification.js';
@@ -76,7 +77,12 @@ export const getUserDashboard = async (userId) => {
 };
 
 export const searchUsers = async (query, currentUserId, limit = 20) => {
-  const searchQuery = {
+  // Get current user's joined team IDs
+  const userMemberships = await TeamMember.find({ user: currentUserId });
+  const joinedTeamIds = userMemberships.map(m => m.team);
+
+  // 1. Search Users / Team Members
+  const userQuery = {
     _id: { $ne: currentUserId },
     isActive: true,
     $or: [
@@ -85,10 +91,62 @@ export const searchUsers = async (query, currentUserId, limit = 20) => {
     ]
   };
 
-  const users = await User.find(searchQuery)
+  const users = await User.find(userQuery)
     .select('name email avatar bio role')
     .limit(limit)
     .sort({ name: 1 });
 
-  return users;
+  // 2. Search Joined Teams
+  const joinedTeamsQuery = {
+    _id: { $in: joinedTeamIds },
+    $or: [
+      { name: { $regex: query, $options: 'i' } },
+      { description: { $regex: query, $options: 'i' } },
+      { joinCode: { $regex: query, $options: 'i' } }
+    ]
+  };
+
+  const joinedTeams = await Team.find(joinedTeamsQuery)
+    .populate('members', '_id')
+    .limit(limit)
+    .sort({ name: 1 });
+
+  // 3. Search Public Teams (excluding joined)
+  const publicTeamsQuery = {
+    _id: { $nin: joinedTeamIds },
+    visibility: 'PUBLIC',
+    $or: [
+      { name: { $regex: query, $options: 'i' } },
+      { description: { $regex: query, $options: 'i' } },
+      { joinCode: { $regex: query, $options: 'i' } }
+    ]
+  };
+
+  const publicTeams = await Team.find(publicTeamsQuery)
+    .populate('members', '_id')
+    .limit(limit)
+    .sort({ name: 1 });
+
+  const formatTeam = (t, isJoined) => ({
+    _id: t._id,
+    name: t.name,
+    description: t.description,
+    logo: t.logo,
+    joinCode: t.joinCode,
+    visibility: t.visibility,
+    isJoined,
+    memberCount: (t.members || []).length
+  });
+
+  return {
+    users,
+    joinedTeams: joinedTeams.map(t => formatTeam(t, true)),
+    publicTeams: publicTeams.map(t => formatTeam(t, false)),
+    teams: [
+      ...joinedTeams.map(t => formatTeam(t, true)),
+      ...publicTeams.map(t => formatTeam(t, false))
+    ]
+  };
 };
+
+
