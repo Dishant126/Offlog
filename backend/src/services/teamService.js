@@ -369,8 +369,8 @@ export const removeMember = async (teamId, memberId, userId) => {
     throw new Error('Cannot remove team leader');
   }
 
-  if (membership.role === 'MENTOR' && targetMember.role === 'MENTOR') {
-    throw new Error('Mentors cannot remove other mentors');
+  if (targetMember.role === 'MENTOR') {
+    throw new Error('Cannot remove a mentor from the team');
   }
 
   const team = await Team.findById(teamId);
@@ -424,6 +424,14 @@ export const updateMemberRole = async (teamId, memberId, newRole, userId) => {
     throw new Error('Cannot change team leader role directly. Use transfer leadership.');
   }
 
+  if (targetMember.role === 'MENTOR') {
+    throw new Error('Cannot demote a mentor');
+  }
+
+  if (newRole === 'MENTOR') {
+    throw new Error('Cannot promote a member to mentor');
+  }
+
   const oldRole = targetMember.role;
   targetMember.role = newRole;
   await targetMember.save();
@@ -459,6 +467,10 @@ export const transferLeadership = async (teamId, newLeaderId, userId, isAdmin = 
 
   const newLeader = await TeamMember.findOne({ team: teamId, user: newLeaderId }).populate('user', 'name');
   if (!newLeader) throw new Error('User is not a member of this team');
+
+  if (newLeader.role === 'MENTOR') {
+    throw new Error('Cannot transfer leadership to a mentor');
+  }
 
   const team = await Team.findById(teamId);
 

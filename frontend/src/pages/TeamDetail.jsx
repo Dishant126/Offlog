@@ -745,15 +745,8 @@ export default function TeamDetail() {
 
                         {/* Actions Dropdown */}
                         <td className="py-3.5 px-6 text-right">
-                          {isLeader && !isTargetLeader ? (
+                          {isLeader && !isTargetLeader && m.role !== 'MENTOR' ? (
                             <ActionMenu>
-                              <button
-                                onClick={() => handleRoleChange(m.user._id, m.role === 'MENTOR' ? 'MEMBER' : 'MENTOR')}
-                                className="w-full px-4 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                              >
-                                <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
-                                {m.role === 'MENTOR' ? 'Demote to Member' : 'Promote to Mentor'}
-                              </button>
                               <button
                                 onClick={() => handleTransfer(m.user._id)}
                                 className="w-full px-4 py-2 text-left text-xs font-semibold text-primary-600 hover:bg-slate-50 flex items-center gap-2"
@@ -993,15 +986,8 @@ export default function TeamDetail() {
                       </td>
 
                       <td className="py-4 px-6 text-right">
-                        {isLeader && !isTargetLeader ? (
+                        {isLeader && !isTargetLeader && m.role !== 'MENTOR' ? (
                           <ActionMenu>
-                            <button
-                              onClick={() => handleRoleChange(m.user._id, m.role === 'MENTOR' ? 'MEMBER' : 'MENTOR')}
-                              className="w-full px-4 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                            >
-                              <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
-                              {m.role === 'MENTOR' ? 'Demote to Member' : 'Promote to Mentor'}
-                            </button>
                             <button
                               onClick={() => handleTransfer(m.user._id)}
                               className="w-full px-4 py-2 text-left text-xs font-semibold text-primary-600 hover:bg-slate-50 flex items-center gap-2"
