@@ -12,17 +12,16 @@ import {
 
 const unwrap = (res) => res.data?.data ?? res.data;
 
-function StatCard({ icon: Icon, value, label, iconBg, iconColor }) {
+function StatCard({ icon: Icon, value, label, description, iconBg, iconColor }) {
   return (
-    <div className="card hover-lift">
-      <div className="flex items-center gap-4">
-        <div className={`stat-icon ${iconBg}`}>
-          <Icon className={`h-5 w-5 ${iconColor}`} />
-        </div>
-        <div>
-          <p className="text-2xl font-bold text-slate-900">{value ?? '—'}</p>
-          <p className="text-xs text-slate-500 font-medium mt-0.5">{label}</p>
-        </div>
+    <div className="relative overflow-hidden rounded-2xl bg-white p-5 border border-slate-200/80 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300">
+      <div className={`w-9 h-9 rounded-lg ${iconBg} flex items-center justify-center mb-3`}>
+        <Icon className={`h-4.5 w-4.5 ${iconColor}`} />
+      </div>
+      <div>
+        <p className="text-xs text-slate-400 font-semibold">{label}</p>
+        <p className="text-2xl font-bold text-slate-900 mt-1">{value ?? '0'}</p>
+        {description && <p className="text-[10px] text-slate-400 mt-0.5">{description}</p>}
       </div>
     </div>
   );
@@ -250,7 +249,7 @@ export default function AdminDashboard() {
   if (loading) return <div className="flex items-center justify-center py-20"><Loader size="lg" /></div>;
 
   const tabs = [
-    { id: 'overview font-semibold', label: 'Overview', icon: BarChart3 },
+    { id: 'overview', label: 'Overview', icon: BarChart3 },
     { id: 'users', label: 'Users', icon: Users },
     { id: 'teams', label: 'Teams', icon: Shield },
     { id: 'mentor-management', label: 'Mentor Management', icon: MentorIcon },
@@ -293,32 +292,187 @@ export default function AdminDashboard() {
       {/* ════════════ OVERVIEW TAB ════════════ */}
       {activeTab === 'overview' && stats && (
         <div className="animate-fade-in space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard icon={Users}     value={stats.totalUsers}        label="Total Users"        iconBg="bg-blue-50"     iconColor="text-blue-600" />
-            <StatCard icon={Award}     value={stats.totalMentors || 0} label="Assigned Mentors"   iconBg="bg-amber-50"    iconColor="text-amber-600" />
-            <StatCard icon={Shield}    value={stats.totalTeams}        label="Total Teams"        iconBg="bg-purple-50"   iconColor="text-purple-600" />
-            <StatCard icon={Clock}     value={stats.totalJoinRequests} label="Pending Requests"   iconBg="bg-emerald-50"  iconColor="text-emerald-600" />
-          </div>
-
-          {stats.totalUsers > 0 && (
-            <div className="card">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-semibold text-slate-800 flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-blue-600" />
-                  Active System Accounts
-                </h3>
-                <span className="text-sm font-bold text-blue-600">
-                  {stats.activeUsers} / {stats.totalUsers}
+          {/* Welcome Banner Hero Card */}
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 text-white shadow-lg border border-slate-800/50">
+            {/* Ambient background glows */}
+            <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none" />
+            <div className="absolute -left-10 -bottom-10 h-40 w-40 rounded-full bg-blue-500/10 blur-3xl pointer-events-none" />
+            
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 mb-3 animate-pulse">
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                  System Active
                 </span>
+                <h2 className="text-xl md:text-2xl font-bold tracking-tight">Welcome back, System Admin!</h2>
+                <p className="text-slate-400 text-sm mt-1">Here is a quick summary of what is happening across the OffLog workspace today.</p>
               </div>
-              <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-blue-600 rounded-full transition-all duration-500"
-                  style={{ width: `${Math.round((stats.activeUsers / stats.totalUsers) * 100)}%` }}
-                />
+              <div className="flex items-center gap-2 bg-slate-800/40 backdrop-blur-sm border border-slate-700/50 rounded-xl px-4 py-2 self-start md:self-auto text-xs font-semibold text-slate-300">
+                <Clock className="h-4 w-4 text-indigo-400" />
+                {new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
               </div>
             </div>
-          )}
+          </div>
+
+          {/* Stat Cards Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard 
+              icon={Users} 
+              value={stats.totalUsers} 
+              label="Total Accounts" 
+              description="Registered system profiles"
+              iconBg="bg-blue-50"
+              iconColor="text-blue-600"
+            />
+            <StatCard 
+              icon={Award} 
+              value={stats.totalMentors || 0} 
+              label="Assigned Mentors" 
+              description="Mentors actively guiding teams"
+              iconBg="bg-amber-50"
+              iconColor="text-amber-600"
+            />
+            <StatCard 
+              icon={Shield} 
+              value={stats.totalTeams} 
+              label="Total Teams" 
+              description="Created groups & departments"
+              iconBg="bg-purple-50"
+              iconColor="text-purple-600"
+            />
+            <StatCard 
+              icon={Clock} 
+              value={stats.totalJoinRequests} 
+              label="Pending Requests" 
+              description="Users waiting for team approval"
+              iconBg="bg-emerald-50"
+              iconColor="text-emerald-600"
+            />
+          </div>
+
+          {/* Two-Column Section: Detailed Status and Activities */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            {/* Left Column: System Status / Accounts Breakdown (col-span-2) */}
+            <div className="lg:col-span-2 space-y-6">
+              
+              {/* Active System Accounts Card */}
+              {stats.totalUsers > 0 && (
+                <div className="relative overflow-hidden rounded-2xl bg-white p-6 border border-slate-200/80 shadow-sm">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                    <div>
+                      <h3 className="font-bold text-slate-900 flex items-center gap-2 text-sm">
+                        <TrendingUp className="h-4 w-4 text-indigo-500" />
+                        Active System Accounts
+                      </h3>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Ratio of active users versus total registered accounts.</p>
+                    </div>
+                    
+                    <div className="flex items-center gap-2 text-xs font-semibold">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        {stats.activeUsers} Active
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
+                        {stats.totalUsers - stats.activeUsers} Inactive
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="h-3.5 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200/50">
+                      <div
+                        className="h-full bg-gradient-to-r from-blue-600 to-indigo-500 rounded-full transition-all duration-1000 relative"
+                        style={{ width: `${Math.round((stats.activeUsers / stats.totalUsers) * 100)}%` }}
+                      >
+                        <div className="absolute top-0 right-0 w-2 h-full bg-white/30 rounded-full animate-pulse" />
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold px-0.5 uppercase tracking-wider">
+                      <span>0%</span>
+                      <span className="text-indigo-600 font-extrabold">{Math.round((stats.activeUsers / stats.totalUsers) * 100)}% Active</span>
+                      <span>100%</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Role Distribution Card */}
+              <div className="rounded-2xl bg-white p-6 border border-slate-200/80 shadow-sm">
+                <h3 className="font-bold text-slate-900 flex items-center gap-2 text-sm mb-4">
+                  <Users className="h-4 w-4 text-blue-500" />
+                  System Role Distribution
+                </h3>
+                
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 flex flex-col items-center justify-center text-center">
+                    <span className="text-[10px] font-bold text-purple-700 px-2 py-0.5 rounded-full bg-purple-50 border border-purple-100 mb-2">Admins</span>
+                    <p className="text-2xl font-extrabold text-slate-900">
+                      {users.filter(u => u.role === 'ADMIN').length}
+                    </p>
+                  </div>
+                  
+                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 flex flex-col items-center justify-center text-center">
+                    <span className="text-[10px] font-bold text-amber-700 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-100 mb-2">Mentors</span>
+                    <p className="text-2xl font-extrabold text-slate-900">
+                      {users.filter(u => u.role === 'MENTOR').length}
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 flex flex-col items-center justify-center text-center">
+                    <span className="text-[10px] font-bold text-slate-700 px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200 mb-2">Members</span>
+                    <p className="text-2xl font-extrabold text-slate-900">
+                      {users.filter(u => u.role === 'USER').length}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Right Column: Recent Activities Timeline (col-span-1) */}
+            <div className="rounded-2xl bg-white border border-slate-200/80 shadow-sm flex flex-col overflow-hidden h-[342px]">
+              <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                  <Activity className="h-4 w-4 text-indigo-500 animate-pulse" />
+                  Recent Activity logs
+                </h3>
+                <button onClick={() => switchTab('logs')} className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700">
+                  View All
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+                {logs.length === 0 ? (
+                  <div className="text-center py-10 text-slate-400 text-xs">No activity logs yet</div>
+                ) : (
+                  logs.slice(0, 5).map((log) => {
+                    const actionLabel = log.action.replace(/_/g, ' ');
+                    const badgeColor = ACTION_COLORS[log.action] ?? 'bg-slate-100 text-slate-600';
+                    return (
+                      <div key={log._id} className="flex gap-3 items-start text-xs border-b border-slate-50 pb-3 last:border-0 last:pb-0">
+                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-1.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-slate-800 truncate">
+                            {log.user?.name ?? 'System'}
+                          </p>
+                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                            <span className={`px-1.5 py-0.2 rounded font-bold text-[9px] uppercase tracking-wide ${badgeColor}`}>
+                              {actionLabel}
+                            </span>
+                            <span className="text-[10px] text-slate-400">
+                              {new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+          </div>
         </div>
       )}
 
